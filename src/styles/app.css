@@ -150,7 +150,6 @@ a:focus-visible { outline: 2px solid #00e; outline-offset: 1px; }
 .emoji-list button { min-width: 38px; }
 .replies { margin: 14px 0 -18px 20px; border-left: 2px solid #ccc; padding-left: 14px; }
 .post.reply { border-bottom: 0; border-top: 1px dotted #aaa; }
-.post.focused-post { outline: 2px solid #777; outline-offset: 4px; }
 .thread-link { margin: 14px 0 0; }
 .feed-loader { min-height: 1px; margin: 20px 0; text-align: center; }
 .feed-loader .error button { padding: 2px 5px; }
