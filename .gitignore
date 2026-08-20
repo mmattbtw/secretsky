@@ -1,0 +1,52 @@
+# Dependencies and package-manager caches
+/node_modules/
+/.pnpm-store/
+
+# Build output
+/.output/
+/.tanstack/
+/out/
+/dist/
+/build/
+/lib/lexicons/
+next-env.d.ts
+*.tsbuildinfo
+
+# Local environment and deployment state
+.env*
+.vercel/
+*.local
+
+# Local databases and runtime state
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.pid
+*.pid.lock
+/secretsky-blobs/
+
+# Test output
+/coverage/
+/.nyc_output/
+/playwright-report/
+/test-results/
+
+# Logs and diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local certificates and keys
+*.pem
+*.key
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

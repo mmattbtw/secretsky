@@ -1,0 +1,21 @@
+diff --git a/dist/unicast.js b/dist/unicast.js
+index ce1ecf5a17cedab2f4c386bc238f295be200ddfe..23a30f676a31945f01c7b604533b57a303bd7b63 100644
+--- a/dist/unicast.js
++++ b/dist/unicast.js
+@@ -2,7 +2,6 @@ import { lookup } from 'node:dns';
+ import ipaddr from 'ipaddr.js';
+ import { Agent as Undici6Agent } from 'undici_v6'; // NodeJS 22
+ import { Agent as Undici7Agent } from 'undici_v7'; // NodeJS 24
+-import { Agent as Undici8Agent } from 'undici_v8'; // NodeJS 26
+ import { FetchRequestError, asRequest, extractUrl, } from '@atproto-labs/fetch';
+ import { compareVersions, isUnicastIpHostname, parseVersion } from './util.js';
+ const { IPv4, IPv6 } = ipaddr;
+@@ -26,7 +25,7 @@ export function unicastFetchWrap({ fetch = globalThis.fetch, } = {}) {
+         : nodeUndiciVersion[0] === 7
+             ? new Undici7Agent({ connect: { lookup: unicastLookup } })
+             : nodeUndiciVersion[0] === 8
+-                ? new Undici8Agent({ connect: { lookup: unicastLookup } })
++                ? new Undici7Agent({ connect: { lookup: unicastLookup } })
+                 : null;
+     // @NOTE Because this is a security feature, we don't want to fallback to
+     // using Agent8 to "future proof" this package. Although future version of
