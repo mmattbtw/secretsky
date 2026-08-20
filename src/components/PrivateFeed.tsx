@@ -4,7 +4,7 @@ import {
   REACTION_EMOJI_OPTIONS,
   visibleReactionEmojiCounts,
 } from "@/lib/reaction-emoji";
-import { postRouteId } from "@/lib/post-route";
+import { postPermalink } from "@/lib/post-route";
 import { getHomeFeedPage } from "~/server/page-data.functions";
 import { submitPostShortcut } from "./form-shortcuts";
 
@@ -418,9 +418,9 @@ function PostItem({
     >
       <header>
         <Link to="/$handle" params={{ handle }}>@{handle}</Link>
-        <Link to="/post/$postId" params={{ postId: postRouteId(post.uri) }}>
+        <a href={postPermalink(post.uri)}>
           <time dateTime={post.createdAt}>{formatDate(post.createdAt)}</time>
-        </Link>
+        </a>
       </header>
       <p>{post.text}</p>
       <div className="post-actions">
@@ -522,13 +522,10 @@ function PostItem({
         post.threadReplyCount !== undefined &&
         post.threadReplyCount > children.length && (
           <p className="thread-link">
-            <Link
-              to="/post/$postId"
-              params={{ postId: postRouteId(post.uri) }}
-            >
+            <a href={postPermalink(post.uri)}>
               view all {post.threadReplyCount}{" "}
               {post.threadReplyCount === 1 ? "reply" : "replies"}
-            </Link>
+            </a>
           </p>
         )}
     </article>

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "bun:test";
-import { postOwnerDid, postRouteId, postUriFromRouteId } from "./post-route";
+import {
+  postOwnerDid,
+  postPermalink,
+  postRouteId,
+  postUriFromPath,
+  postUriFromRouteId,
+} from "./post-route";
 
 const uri =
   "at://did:plc:owner/space/at.secretsky.feed/self/did:plc:author/at.secretsky.post/3mexample";
@@ -17,5 +23,14 @@ test("post route ids reject malformed and non-secretsky records", () => {
   assert.throws(
     () => postRouteId("at://did:plc:owner/app.bsky.feed.post/example"),
     /Invalid secretsky post URI/,
+  );
+});
+
+test("post paths accept the raw secretsky AT URI", () => {
+  assert.equal(postUriFromPath(uri), uri);
+  assert.equal(postPermalink(uri), `/post?uri=${uri}`);
+  assert.equal(
+    postUriFromPath("at://did:plc:owner/app.bsky.feed.post/example"),
+    null,
   );
 });

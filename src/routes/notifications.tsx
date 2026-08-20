@@ -4,7 +4,7 @@ import { LoginForm } from "~/components/LoginForm";
 import { IncomingFollows } from "~/components/ProfileActions";
 import { SiteHeader } from "~/components/SiteHeader";
 import { submitPostShortcut } from "~/components/form-shortcuts";
-import { postRouteId } from "@/lib/post-route";
+import { postPermalink } from "@/lib/post-route";
 import { getNotificationsData } from "~/server/page-data.functions";
 
 export const Route = createFileRoute("/notifications")({
@@ -68,10 +68,7 @@ function NotificationsPage() {
                   <blockquote>{reaction.postText}</blockquote>
                   <small>
                     {formatDate(reaction.createdAt)}{" · "}
-                    <Link
-                      to="/post/$postId"
-                      params={{ postId: postRouteId(reaction.postUri) }}
-                    >view post</Link>
+                    <a href={postPermalink(reaction.postUri)}>view post</a>
                   </small>
                 </li>
               );
@@ -116,10 +113,7 @@ function ReplyNotification({
       <blockquote>{reply.text}</blockquote>
       <small>
         {formatDate(reply.createdAt)}{" · "}
-        <Link
-          to="/post/$postId"
-          params={{ postId: postRouteId(reply.uri) }}
-        >view post</Link>
+        <a href={postPermalink(reply.uri)}>view post</a>
       </small>
       <div><button disabled={!canWrite} onClick={() => setOpen((value) => !value)}>reply</button></div>
       {open && (

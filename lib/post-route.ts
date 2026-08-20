@@ -1,6 +1,15 @@
 const POST_URI_PATTERN =
   /^at:\/\/did:[^/]+\/space\/at\.secretsky\.feed\/self\/did:[^/]+\/at\.secretsky\.post\/[^/]+$/;
 
+export function postUriFromPath(value: string): string | null {
+  return POST_URI_PATTERN.test(value) ? value : null;
+}
+
+export function postPermalink(uri: string): string {
+  if (!POST_URI_PATTERN.test(uri)) throw new Error("Invalid secretsky post URI");
+  return `/post?uri=${uri}`;
+}
+
 export function postRouteId(uri: string): string {
   if (!POST_URI_PATTERN.test(uri)) throw new Error("Invalid secretsky post URI");
   const binary = String.fromCharCode(...new TextEncoder().encode(uri));

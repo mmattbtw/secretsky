@@ -14,6 +14,7 @@ import { Route as HandleRouteImport } from './routes/$handle'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as OauthClientMetadataDotjsonRouteImport } from './routes/oauth-client-metadata[.]json'
+import { Route as PostRouteImport } from './routes/post'
 import { Route as DotwellKnownDidDotjsonRouteImport } from './routes/[.]well-known.did[.]json'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as ApiBoardsRouteImport } from './routes/api.boards'
@@ -57,6 +58,11 @@ const OauthClientMetadataDotjsonRoute =
     path: '/oauth-client-metadata.json',
     getParentRoute: () => rootRouteImport,
   } as any)
+const PostRoute = PostRouteImport.update({
+  id: '/post',
+  path: '/post',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DotwellKnownDidDotjsonRoute = DotwellKnownDidDotjsonRouteImport.update({
   id: '/.well-known/did.json',
   path: '/.well-known/did.json',
@@ -113,9 +119,9 @@ const OauthLogoutRoute = OauthLogoutRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const PostPostIdRoute = PostPostIdRouteImport.update({
-  id: '/post/$postId',
-  path: '/post/$postId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$postId',
+  path: '/$postId',
+  getParentRoute: () => PostRoute,
 } as any)
 const SyncHealthRoute = SyncHealthRouteImport.update({
   id: '/sync/health',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/notifications': typeof NotificationsRoute
   '/oauth-client-metadata.json': typeof OauthClientMetadataDotjsonRoute
+  '/post': typeof PostRouteWithChildren
   '/.well-known/did.json': typeof DotwellKnownDidDotjsonRoute
   '/api/$': typeof ApiSplatRoute
   '/api/boards': typeof ApiBoardsRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/notifications': typeof NotificationsRoute
   '/oauth-client-metadata.json': typeof OauthClientMetadataDotjsonRoute
+  '/post': typeof PostRouteWithChildren
   '/.well-known/did.json': typeof DotwellKnownDidDotjsonRoute
   '/api/$': typeof ApiSplatRoute
   '/api/boards': typeof ApiBoardsRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/notifications': typeof NotificationsRoute
   '/oauth-client-metadata.json': typeof OauthClientMetadataDotjsonRoute
+  '/post': typeof PostRouteWithChildren
   '/.well-known/did.json': typeof DotwellKnownDidDotjsonRoute
   '/api/$': typeof ApiSplatRoute
   '/api/boards': typeof ApiBoardsRoute
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/notifications'
     | '/oauth-client-metadata.json'
+    | '/post'
     | '/.well-known/did.json'
     | '/api/$'
     | '/api/boards'
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/notifications'
     | '/oauth-client-metadata.json'
+    | '/post'
     | '/.well-known/did.json'
     | '/api/$'
     | '/api/boards'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/notifications'
     | '/oauth-client-metadata.json'
+    | '/post'
     | '/.well-known/did.json'
     | '/api/$'
     | '/api/boards'
@@ -289,6 +301,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   NotificationsRoute: typeof NotificationsRoute
   OauthClientMetadataDotjsonRoute: typeof OauthClientMetadataDotjsonRoute
+  PostRoute: typeof PostRouteWithChildren
   DotwellKnownDidDotjsonRoute: typeof DotwellKnownDidDotjsonRoute
   ApiSplatRoute: typeof ApiSplatRoute
   ApiBoardsRoute: typeof ApiBoardsRoute
@@ -300,7 +313,6 @@ export interface RootRouteChildren {
   OauthCallbackRoute: typeof OauthCallbackRoute
   OauthLoginRoute: typeof OauthLoginRoute
   OauthLogoutRoute: typeof OauthLogoutRoute
-  PostPostIdRoute: typeof PostPostIdRoute
   SyncHealthRoute: typeof SyncHealthRoute
   XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute: typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
   XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute: typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
@@ -342,6 +354,13 @@ declare module '@tanstack/react-router' {
       path: '/oauth-client-metadata.json'
       fullPath: '/oauth-client-metadata.json'
       preLoaderRoute: typeof OauthClientMetadataDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/post': {
+      id: '/post'
+      path: '/post'
+      fullPath: '/post'
+      preLoaderRoute: typeof PostRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.well-known/did.json': {
@@ -423,10 +442,10 @@ declare module '@tanstack/react-router' {
     }
     '/post/$postId': {
       id: '/post/$postId'
-      path: '/post/$postId'
+      path: '/$postId'
       fullPath: '/post/$postId'
       preLoaderRoute: typeof PostPostIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof PostRoute
     }
     '/sync/health': {
       id: '/sync/health'
@@ -459,12 +478,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface PostRouteChildren {
+  PostPostIdRoute: typeof PostPostIdRoute
+}
+
+const PostRouteChildren: PostRouteChildren = {
+  PostPostIdRoute: PostPostIdRoute,
+}
+
+const PostRouteWithChildren = PostRoute._addFileChildren(PostRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HandleRoute: HandleRoute,
   AboutRoute: AboutRoute,
   NotificationsRoute: NotificationsRoute,
   OauthClientMetadataDotjsonRoute: OauthClientMetadataDotjsonRoute,
+  PostRoute: PostRouteWithChildren,
   DotwellKnownDidDotjsonRoute: DotwellKnownDidDotjsonRoute,
   ApiSplatRoute: ApiSplatRoute,
   ApiBoardsRoute: ApiBoardsRoute,
@@ -476,7 +506,6 @@ const rootRouteChildren: RootRouteChildren = {
   OauthCallbackRoute: OauthCallbackRoute,
   OauthLoginRoute: OauthLoginRoute,
   OauthLogoutRoute: OauthLogoutRoute,
-  PostPostIdRoute: PostPostIdRoute,
   SyncHealthRoute: SyncHealthRoute,
   XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute:
     XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute,

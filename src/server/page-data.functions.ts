@@ -17,7 +17,11 @@ import {
   listReactionNotifications,
   listReplyNotifications,
 } from "@/lib/db/queries";
-import { postOwnerDid, postUriFromRouteId } from "@/lib/post-route";
+import {
+  postOwnerDid,
+  postUriFromPath,
+  postUriFromRouteId,
+} from "@/lib/post-route";
 import {
   canAccessFeed,
   getPrivateFollowRelationship,
@@ -142,12 +146,13 @@ export const getNotificationsData = createServerFn({ method: "GET" })
   });
 
 export const getPostPageData = createServerFn({ method: "GET" })
-  .validator((input: { postId: string }) => input)
+  .validator((input: { postRef: string }) => input)
   .handler(async ({ data }) => {
     const session = await currentSession();
     if (!session) return { kind: "signedOut" as const };
 
-    const uri = postUriFromRouteId(data.postId);
+    const uri =
+      postUriFromPath(data.postRef) ?? postUriFromRouteId(data.postRef);
     const ownerDid = uri ? postOwnerDid(uri) : null;
     if (!uri || !ownerDid || !(await canAccessFeed(session.did, ownerDid))) {
       return { kind: "unavailable" as const, viewerHandle: null };
