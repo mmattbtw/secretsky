@@ -39,3 +39,17 @@ test("post paths accept the raw secretsky AT URI", () => {
     null,
   );
 });
+
+test("post permalinks support did:web feed owners", () => {
+  const webUri =
+    "at://did:web:example.com:users:alice/space/at.secretsky.feed/self/did:web:example.com:users:alice/at.secretsky.post/3mwebexample";
+
+  assert.equal(postUriFromPath(webUri), webUri);
+  assert.equal(postOwnerDid(webUri), "did:web:example.com:users:alice");
+  assert.equal(postRkey(webUri), "3mwebexample");
+  assert.equal(
+    postPermalink(webUri),
+    "/profile/did:web:example.com:users:alice/post/3mwebexample",
+  );
+  assert.equal(postUriFromRouteId(postRouteId(webUri)), webUri);
+});
