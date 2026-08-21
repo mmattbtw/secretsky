@@ -1,13 +1,14 @@
 const POST_URI_PATTERN =
-  /^at:\/\/did:[^/]+\/space\/at\.secretsky\.feed\/self\/did:[^/]+\/at\.secretsky\.post\/[^/]+$/;
+  /^at:\/\/(did:[^/]+)\/space\/at\.secretsky\.feed\/self\/did:[^/]+\/at\.secretsky\.post\/([^/]+)$/;
 
 export function postUriFromPath(value: string): string | null {
   return POST_URI_PATTERN.test(value) ? value : null;
 }
 
 export function postPermalink(uri: string): string {
-  if (!POST_URI_PATTERN.test(uri)) throw new Error("Invalid secretsky post URI");
-  return `/post?uri=${uri}`;
+  const parts = postRouteParts(uri);
+  if (!parts) throw new Error("Invalid secretsky post URI");
+  return `/profile/${parts.ownerDid}/post/${parts.rkey}`;
 }
 
 export function postRouteId(uri: string): string {
@@ -35,5 +36,18 @@ export function postUriFromRouteId(id: string): string | null {
 }
 
 export function postOwnerDid(uri: string): string | null {
-  return uri.match(/^at:\/\/(did:[^/]+)\/space\//)?.[1] ?? null;
+  return postRouteParts(uri)?.ownerDid ?? null;
+}
+
+export function postRkey(uri: string): string | null {
+  return postRouteParts(uri)?.rkey ?? null;
+}
+
+function postRouteParts(
+  uri: string,
+): { ownerDid: string; rkey: string } | null {
+  const match = uri.match(POST_URI_PATTERN);
+  return match?.[1] && match[2]
+    ? { ownerDid: match[1], rkey: match[2] }
+    : null;
 }

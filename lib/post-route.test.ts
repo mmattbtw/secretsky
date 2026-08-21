@@ -3,6 +3,7 @@ import { test } from "bun:test";
 import {
   postOwnerDid,
   postPermalink,
+  postRkey,
   postRouteId,
   postUriFromPath,
   postUriFromRouteId,
@@ -28,7 +29,11 @@ test("post route ids reject malformed and non-secretsky records", () => {
 
 test("post paths accept the raw secretsky AT URI", () => {
   assert.equal(postUriFromPath(uri), uri);
-  assert.equal(postPermalink(uri), `/post?uri=${uri}`);
+  assert.equal(
+    postPermalink(uri),
+    "/profile/did:plc:owner/post/3mexample",
+  );
+  assert.equal(postRkey(uri), "3mexample");
   assert.equal(
     postUriFromPath("at://did:plc:owner/app.bsky.feed.post/example"),
     null,

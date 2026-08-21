@@ -31,6 +31,7 @@ import { Route as SyncHealthRouteImport } from './routes/sync.health'
 import { Route as XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRouteImport } from './routes/xrpc.com[.]atproto[.]simplespace[.]checkUserAccess'
 import { Route as XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRouteImport } from './routes/xrpc.com[.]atproto[.]space[.]notifySpaceDeleted'
 import { Route as XrpcComDotatprotoDotspaceDotnotifyWriteRouteImport } from './routes/xrpc.com[.]atproto[.]space[.]notifyWrite'
+import { Route as ProfileProfilePostRkeyRouteImport } from './routes/profile.$profile.post.$rkey'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -146,6 +147,11 @@ const XrpcComDotatprotoDotspaceDotnotifyWriteRoute =
     path: '/xrpc/com.atproto.space.notifyWrite',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ProfileProfilePostRkeyRoute = ProfileProfilePostRkeyRouteImport.update({
+  id: '/profile/$profile/post/$rkey',
+  path: '/profile/$profile/post/$rkey',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/xrpc/com.atproto.simplespace.checkUserAccess': typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
   '/xrpc/com.atproto.space.notifySpaceDeleted': typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
   '/xrpc/com.atproto.space.notifyWrite': typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  '/profile/$profile/post/$rkey': typeof ProfileProfilePostRkeyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/xrpc/com.atproto.simplespace.checkUserAccess': typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
   '/xrpc/com.atproto.space.notifySpaceDeleted': typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
   '/xrpc/com.atproto.space.notifyWrite': typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  '/profile/$profile/post/$rkey': typeof ProfileProfilePostRkeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/xrpc/com.atproto.simplespace.checkUserAccess': typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
   '/xrpc/com.atproto.space.notifySpaceDeleted': typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
   '/xrpc/com.atproto.space.notifyWrite': typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  '/profile/$profile/post/$rkey': typeof ProfileProfilePostRkeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/xrpc/com.atproto.simplespace.checkUserAccess'
     | '/xrpc/com.atproto.space.notifySpaceDeleted'
     | '/xrpc/com.atproto.space.notifyWrite'
+    | '/profile/$profile/post/$rkey'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/xrpc/com.atproto.simplespace.checkUserAccess'
     | '/xrpc/com.atproto.space.notifySpaceDeleted'
     | '/xrpc/com.atproto.space.notifyWrite'
+    | '/profile/$profile/post/$rkey'
   id:
     | '__root__'
     | '/'
@@ -293,6 +304,7 @@ export interface FileRouteTypes {
     | '/xrpc/com.atproto.simplespace.checkUserAccess'
     | '/xrpc/com.atproto.space.notifySpaceDeleted'
     | '/xrpc/com.atproto.space.notifyWrite'
+    | '/profile/$profile/post/$rkey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -317,6 +329,7 @@ export interface RootRouteChildren {
   XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute: typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
   XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute: typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
   XrpcComDotatprotoDotspaceDotnotifyWriteRoute: typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  ProfileProfilePostRkeyRoute: typeof ProfileProfilePostRkeyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -475,6 +488,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof XrpcComDotatprotoDotspaceDotnotifyWriteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile/$profile/post/$rkey': {
+      id: '/profile/$profile/post/$rkey'
+      path: '/profile/$profile/post/$rkey'
+      fullPath: '/profile/$profile/post/$rkey'
+      preLoaderRoute: typeof ProfileProfilePostRkeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -513,6 +533,7 @@ const rootRouteChildren: RootRouteChildren = {
     XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute,
   XrpcComDotatprotoDotspaceDotnotifyWriteRoute:
     XrpcComDotatprotoDotspaceDotnotifyWriteRoute,
+  ProfileProfilePostRkeyRoute: ProfileProfilePostRkeyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

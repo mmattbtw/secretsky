@@ -10,7 +10,6 @@ import { boardUri } from "@/lib/config";
 import { paginateFeedThreads } from "@/lib/feed-pagination";
 import {
   getAccount,
-  getPost,
   hasBoard,
   hasSpaceWatch,
   listFeedPosts,
@@ -19,6 +18,7 @@ import {
 } from "@/lib/db/queries";
 import {
   postOwnerDid,
+  postRkey,
   postUriFromPath,
   postUriFromRouteId,
 } from "@/lib/post-route";
@@ -154,44 +154,81 @@ export const getPostPageData = createServerFn({ method: "GET" })
     const uri =
       postUriFromPath(data.postRef) ?? postUriFromRouteId(data.postRef);
     const ownerDid = uri ? postOwnerDid(uri) : null;
-    if (!uri || !ownerDid || !(await canAccessFeed(session.did, ownerDid))) {
+    if (!uri || !ownerDid) {
       return { kind: "unavailable" as const, viewerHandle: null };
     }
-
-    await Promise.all([
-      cacheIdentity(session.did).catch(() => undefined),
-      ensureBoardKnown(ownerDid),
-    ]);
-    const target = await getPost(uri);
-    if (!target || target.spaceUri !== boardUri(ownerDid)) {
-      return {
-        kind: "unavailable" as const,
-        viewerHandle: (await getAccount(session.did))?.handle ?? null,
-      };
-    }
-
-    const [account, capabilities, feedPosts] = await Promise.all([
-      getAccount(session.did),
-      getBulletinCapabilities(session, ownerDid).catch(() => null),
-      listFeedPosts(boardUri(ownerDid), ownerDid, session.did),
-    ]);
-    const posts = feedPosts.filter(
-      (post) => !post.hidden || post.authorDid === session.did,
-    );
-    const profiles = await profileMap(posts.map(({ authorDid }) => authorDid));
-    return {
-      kind: "post" as const,
-      viewer: { did: session.did, handle: account?.handle ?? null },
-      ownerDid,
-      targetUri: uri,
-      canWrite: capabilities?.canCreateNote === true,
-      posts: posts.map((post) => ({
-        ...post,
-        feedOwnerDid: ownerDid,
-        author: profiles.get(post.authorDid) ?? null,
-      })),
-    };
+    return postPageData(session, ownerDid, (post) => post.uri === uri);
   });
+
+export const getProfilePostPageData = createServerFn({ method: "GET" })
+  .validator((input: { profile: string; rkey: string }) => input)
+  .handler(async ({ data }) => {
+    const session = await currentSession();
+    if (!session) return { kind: "signedOut" as const };
+
+    const profile = data.profile.replace(/^@/, "");
+    const ownerDid = profile.startsWith("did:")
+      ? profile
+      : await resolveHandle(profile).catch(() => null);
+    if (
+      !ownerDid ||
+      ownerDid.includes("/") ||
+      !data.rkey ||
+      data.rkey.length > 512 ||
+      data.rkey.includes("/")
+    ) {
+      return { kind: "unavailable" as const, viewerHandle: null };
+    }
+    return postPageData(
+      session,
+      ownerDid,
+      (post) => postRkey(post.uri) === data.rkey,
+    );
+  });
+
+async function postPageData(
+  session: CurrentSession,
+  ownerDid: string,
+  isTarget: (post: { uri: string }) => boolean,
+) {
+  if (!(await canAccessFeed(session.did, ownerDid))) {
+    return { kind: "unavailable" as const, viewerHandle: null };
+  }
+
+  await Promise.all([
+    cacheIdentity(session.did).catch(() => undefined),
+    ensureBoardKnown(ownerDid),
+  ]);
+
+  const [account, capabilities, feedPosts] = await Promise.all([
+    getAccount(session.did),
+    getBulletinCapabilities(session, ownerDid).catch(() => null),
+    listFeedPosts(boardUri(ownerDid), ownerDid, session.did),
+  ]);
+  const posts = feedPosts.filter(
+    (post) => !post.hidden || post.authorDid === session.did,
+  );
+  const target = posts.find(isTarget);
+  if (!target) {
+    return {
+      kind: "unavailable" as const,
+      viewerHandle: account?.handle ?? null,
+    };
+  }
+  const profiles = await profileMap(posts.map(({ authorDid }) => authorDid));
+  return {
+    kind: "post" as const,
+    viewer: { did: session.did, handle: account?.handle ?? null },
+    ownerDid,
+    targetUri: target.uri,
+    canWrite: capabilities?.canCreateNote === true,
+    posts: posts.map((post) => ({
+      ...post,
+      feedOwnerDid: ownerDid,
+      author: profiles.get(post.authorDid) ?? null,
+    })),
+  };
+}
 
 export const getProfilePageData = createServerFn({ method: "GET" })
   .validator((input: { handle: string }) => input)
