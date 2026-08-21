@@ -42,14 +42,32 @@ test("post paths accept the raw secretsky AT URI", () => {
 
 test("post permalinks support did:web feed owners", () => {
   const webUri =
-    "at://did:web:example.com:users:alice/space/at.secretsky.feed/self/did:web:example.com:users:alice/at.secretsky.post/3mwebexample";
+    "at://did:web:web.mmatt.net/space/at.secretsky.feed/self/did:web:web.mmatt.net/at.secretsky.post/3mwebexample";
 
   assert.equal(postUriFromPath(webUri), webUri);
-  assert.equal(postOwnerDid(webUri), "did:web:example.com:users:alice");
+  assert.equal(postOwnerDid(webUri), "did:web:web.mmatt.net");
   assert.equal(postRkey(webUri), "3mwebexample");
   assert.equal(
     postPermalink(webUri),
-    "/profile/did:web:example.com:users:alice/post/3mwebexample",
+    "/profile/did:web:web.mmatt.net/post/3mwebexample",
   );
   assert.equal(postUriFromRouteId(postRouteId(webUri)), webUri);
+});
+
+test("post permalinks reject unsupported did:web paths", () => {
+  const pathDidUri =
+    "at://did:web:example.com:users:alice/space/at.secretsky.feed/self/did:web:example.com:users:alice/at.secretsky.post/3mwebexample";
+
+  assert.equal(postUriFromPath(pathDidUri), null);
+  assert.throws(() => postPermalink(pathDidUri), /Invalid secretsky post URI/);
+});
+
+test("post permalinks preserve encoded did:web ports", () => {
+  const localhostUri =
+    "at://did:web:localhost%3A3000/space/at.secretsky.feed/self/did:web:localhost%3A3000/at.secretsky.post/3mlocal";
+
+  assert.equal(
+    postPermalink(localhostUri),
+    "/profile/did:web:localhost%253A3000/post/3mlocal",
+  );
 });

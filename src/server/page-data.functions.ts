@@ -1,6 +1,7 @@
 import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { cacheIdentity, resolveHandle } from "@/lib/atproto/identity";
+import { isSupportedAtprotoDid } from "@/lib/atproto/did";
 import { getProfile, type Profile } from "@/lib/atproto/profile";
 import { getSessionFromToken } from "@/lib/auth/session";
 import { WEB_SESSION_COOKIE_NAME } from "@/lib/auth/web-session";
@@ -168,10 +169,11 @@ export const getProfilePostPageData = createServerFn({ method: "GET" })
 
     const profile = data.profile.replace(/^@/, "");
     const ownerDid = profile.startsWith("did:")
-      ? profile
+      ? isSupportedAtprotoDid(profile) ? profile : null
       : await resolveHandle(profile).catch(() => null);
     if (
       !ownerDid ||
+      !isSupportedAtprotoDid(ownerDid) ||
       ownerDid.includes("/") ||
       !data.rkey ||
       data.rkey.length > 512 ||

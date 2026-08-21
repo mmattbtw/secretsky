@@ -1,18 +1,20 @@
+import { didPathSegment, isSupportedAtprotoDid } from "./atproto/did";
+
 const POST_URI_PATTERN =
-  /^at:\/\/(did:[^/]+)\/space\/at\.secretsky\.feed\/self\/did:[^/]+\/at\.secretsky\.post\/([^/]+)$/;
+  /^at:\/\/(did:[^/]+)\/space\/at\.secretsky\.feed\/self\/(did:[^/]+)\/at\.secretsky\.post\/([^/]+)$/;
 
 export function postUriFromPath(value: string): string | null {
-  return POST_URI_PATTERN.test(value) ? value : null;
+  return postRouteParts(value) ? value : null;
 }
 
 export function postPermalink(uri: string): string {
   const parts = postRouteParts(uri);
   if (!parts) throw new Error("Invalid secretsky post URI");
-  return `/profile/${parts.ownerDid}/post/${parts.rkey}`;
+  return `/profile/${didPathSegment(parts.ownerDid)}/post/${parts.rkey}`;
 }
 
 export function postRouteId(uri: string): string {
-  if (!POST_URI_PATTERN.test(uri)) throw new Error("Invalid secretsky post URI");
+  if (!postRouteParts(uri)) throw new Error("Invalid secretsky post URI");
   const binary = String.fromCharCode(...new TextEncoder().encode(uri));
   return btoa(binary)
     .replaceAll("+", "-")
@@ -29,7 +31,7 @@ export function postUriFromRouteId(id: string): string | null {
       character.charCodeAt(0),
     );
     const uri = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    return POST_URI_PATTERN.test(uri) ? uri : null;
+    return postRouteParts(uri) ? uri : null;
   } catch {
     return null;
   }
@@ -47,7 +49,8 @@ function postRouteParts(
   uri: string,
 ): { ownerDid: string; rkey: string } | null {
   const match = uri.match(POST_URI_PATTERN);
-  return match?.[1] && match[2]
-    ? { ownerDid: match[1], rkey: match[2] }
+  return match?.[1] && match[2] && match[3] &&
+    isSupportedAtprotoDid(match[1]) && isSupportedAtprotoDid(match[2])
+    ? { ownerDid: match[1], rkey: match[3] }
     : null;
 }

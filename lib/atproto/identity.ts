@@ -1,5 +1,6 @@
 import { getPdsEndpoint } from "@atproto/common-web";
 import { IdResolver } from "@atproto/identity";
+import { isSupportedAtprotoDid } from "./did";
 import { getConfig } from "../config";
 import { getAccount, saveAccount } from "../db/queries";
 
@@ -11,6 +12,9 @@ export function getIdResolver(): IdResolver {
 }
 
 export async function resolveDid(did: string, forceRefresh = false) {
+  if (!isSupportedAtprotoDid(did)) {
+    throw new Error(`Unsupported ATProto DID: ${did}`);
+  }
   const doc = await getIdResolver().did.resolve(did, forceRefresh);
   if (!doc) throw new Error(`Could not resolve ${did}`);
   return doc;
@@ -30,10 +34,18 @@ export async function resolvePds(did: string): Promise<string> {
 }
 
 export async function resolveIdentifier(identifier: string): Promise<string> {
-  if (identifier.startsWith("did:")) return identifier;
+  if (identifier.startsWith("did:")) {
+    if (!isSupportedAtprotoDid(identifier)) {
+      throw new Error(`Unsupported ATProto DID: ${identifier}`);
+    }
+    return identifier;
+  }
   const handle = identifier.replace(/^@/, "");
   const did = await resolveHandle(handle);
   if (!did) throw new Error(`Could not resolve @${handle}`);
+  if (!isSupportedAtprotoDid(did)) {
+    throw new Error(`Handle resolved to unsupported DID: ${did}`);
+  }
   return did;
 }
 
