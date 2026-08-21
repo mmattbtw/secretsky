@@ -23,6 +23,11 @@ function AboutPage() {
         <p>A follow is private. Two people must follow each other before either private feed opens.</p>
         <p>Posts, replies, reactions, and follows are protocol records on each user&apos;s PDS. The local database is a synchronized index.</p>
         <p>Spaces provide access control, not end-to-end encryption. This is alpha software. Do not use it for sensitive information.</p>
+        <h2>source code</h2>
+        <ul>
+          <li><a href="https://github.com/mmattbtw/secretsky">GitHub</a></li>
+          <li><a href="https://tangled.org/matt.evil.gay/secretsky">Tangled</a></li>
+        </ul>
       </article>
     </main>
   );
