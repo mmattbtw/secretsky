@@ -1,4 +1,5 @@
 import { Link, useRouter } from "@tanstack/react-router";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   REACTION_EMOJI_OPTIONS,
@@ -423,46 +424,77 @@ function PostItem({
         </Link>
       </header>
       <p>{post.text}</p>
-      <div className="post-actions">
-        {visibleReactions.map(({ emoji, count, actors = [] }) => {
-          const names = actors.map(({ did, handle }) => handle ? `@${handle}` : did);
-          const attribution = names.join(", ");
-          return (
+      <Tooltip.Provider delayDuration={250} skipDelayDuration={100}>
+        <div className="post-actions">
+          {visibleReactions.map(({ emoji, count, actors = [] }) => {
+            const people = actors.map(({ did, handle }) => ({
+              did,
+              name: handle
+                ? `@${handle}${did === viewerDid ? " (you)" : ""}`
+                : did === viewerDid ? "You" : did,
+            }));
+            const attribution = people.map(({ name }) => name).join(", ");
+            const label = count
+              ? `${emoji}, reacted by ${attribution}`
+              : `React with ${emoji}`;
+
+            return (
+              <Tooltip.Root key={emoji}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    aria-disabled={!canWrite || reactionBusy}
+                    aria-label={label}
+                    aria-pressed={post.viewerReactionEmoji === emoji}
+                    onClick={() => void react(emoji)}
+                  >
+                    {emoji}{count || ""}
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="reaction-tooltip"
+                    side="top"
+                    sideOffset={7}
+                    collisionPadding={10}
+                  >
+                    {count ? (
+                      <>
+                        <span className="reaction-tooltip-summary">
+                          {emoji} {count} {count === 1 ? "reaction" : "reactions"}
+                        </span>
+                        <ul>
+                          {people.map(({ did, name }) => <li key={did}>{name}</li>)}
+                        </ul>
+                      </>
+                    ) : (
+                      <span>React with {emoji}</span>
+                    )}
+                    <Tooltip.Arrow className="reaction-tooltip-arrow" />
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            );
+          })}
+          <button disabled={!canWrite || busy} onClick={() => setReplying((value) => !value)}>reply</button>
+          <button disabled={!canWrite || reactionBusy} onClick={() => setReactionOpen((value) => !value)}>emoji</button>
+          {post.authorDid === viewerDid && (
             <button
-              key={emoji}
-              disabled={!canWrite || reactionBusy}
-              title={count ? attribution : `React with ${emoji}`}
-              aria-label={
-                count
-                  ? `${emoji} from ${attribution}`
-                  : `React with ${emoji}`
-              }
-              aria-pressed={post.viewerReactionEmoji === emoji}
-              onClick={() => void react(emoji)}
-            >
-              {emoji}{count || ""}
-            </button>
-          );
-        })}
-        <button disabled={!canWrite || busy} onClick={() => setReplying((value) => !value)}>reply</button>
-        <button disabled={!canWrite || reactionBusy} onClick={() => setReactionOpen((value) => !value)}>emoji</button>
-        {post.authorDid === viewerDid && (
-          <button
-            onClick={async () => {
-              await fetch("/api/posts", {
-                method: "DELETE",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                  ownerDid: post.feedOwnerDid,
-                  postUri: post.uri,
-                  postCid: post.cid,
-                }),
-              });
-              await onRefresh();
-            }}
-          >delete</button>
-        )}
-      </div>
+              onClick={async () => {
+                await fetch("/api/posts", {
+                  method: "DELETE",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    ownerDid: post.feedOwnerDid,
+                    postUri: post.uri,
+                    postCid: post.cid,
+                  }),
+                });
+                await onRefresh();
+              }}
+            >delete</button>
+          )}
+        </div>
+      </Tooltip.Provider>
 
       {reactionOpen && (
         <div className="emoji-list" aria-label="Choose an emoji">
