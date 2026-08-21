@@ -10,7 +10,8 @@
 body { margin: 0; background: #fff; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
-button:disabled { cursor: default; opacity: .55; }
+button:disabled,
+button[aria-disabled="true"] { cursor: default; opacity: .55; }
 a { color: #00e; }
 a:visited { color: #551a8b; }
 textarea { resize: vertical; }
@@ -146,6 +147,35 @@ a:focus-visible { outline: 2px solid #00e; outline-offset: 1px; }
 .post-actions button { border: 0; padding: 0 4px 0 0; color: #00e; text-decoration: underline; }
 .post-actions button:hover:not(:disabled) { background: transparent; }
 .post-actions button[aria-pressed="true"] { font-weight: bold; text-decoration-thickness: 2px; }
+.reaction-tooltip {
+  z-index: 50;
+  max-width: min(280px, calc(100vw - 20px));
+  border: 1px solid #111;
+  padding: 7px 10px 8px;
+  background: #111;
+  color: #fff;
+  font-size: .78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  box-shadow: 2px 2px 0 rgb(0 0 0 / 22%);
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+}
+.reaction-tooltip[data-state="delayed-open"],
+.reaction-tooltip[data-state="instant-open"] { animation: reaction-tooltip-in 120ms ease-out; }
+.reaction-tooltip-summary { display: block; margin-bottom: 3px; font-weight: bold; }
+.reaction-tooltip ul { margin: 0; padding: 0; list-style: none; }
+.reaction-tooltip-arrow { fill: #111; }
+
+@keyframes reaction-tooltip-in {
+  from { opacity: 0; transform: scale(.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reaction-tooltip[data-state="delayed-open"],
+  .reaction-tooltip[data-state="instant-open"] { animation: none; }
+}
+
 .emoji-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .emoji-list button { min-width: 38px; }
 .replies { margin: 14px 0 -18px 20px; border-left: 2px solid #ccc; padding-left: 14px; }

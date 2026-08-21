@@ -28,6 +28,7 @@
     "@atproto/space": "alpha",
     "@atproto/syntax": "alpha",
     "@atproto/xrpc-server": "alpha",
+    "@radix-ui/react-tooltip": "^1.2.16",
     "@tanstack/react-router": "^1.170.31",
     "@tanstack/react-start": "^1.168.48",
     "kysely": "^0.29.5",
