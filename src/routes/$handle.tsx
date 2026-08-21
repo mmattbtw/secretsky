@@ -4,9 +4,22 @@ import { PrivateFeed } from "~/components/PrivateFeed";
 import { CreateFeedButton, FollowGate } from "~/components/ProfileActions";
 import { SiteHeader } from "~/components/SiteHeader";
 import { getProfilePageData } from "~/server/page-data.functions";
+import { pageHead } from "~/site-meta";
 
 export const Route = createFileRoute("/$handle")({
   loader: ({ params }) => getProfilePageData({ data: { handle: params.handle } }),
+  head: ({ loaderData, params }) => {
+    const handle =
+      loaderData && "owner" in loaderData && loaderData.owner
+        ? loaderData.owner.handle
+        : params.handle.replace(/^@/, "");
+    return pageHead({
+      title: `@${handle}`,
+      description: `Follow @${handle} on secretsky to open their private feed when they follow you back.`,
+      path: `/${encodeURIComponent(handle)}`,
+      type: "profile",
+    });
+  },
   component: ProfilePage,
 });
 

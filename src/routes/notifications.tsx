@@ -6,8 +6,16 @@ import { SiteHeader } from "~/components/SiteHeader";
 import { submitPostShortcut } from "~/components/form-shortcuts";
 import { postPermalink } from "@/lib/post-route";
 import { getNotificationsData } from "~/server/page-data.functions";
+import { pageHead } from "~/site-meta";
 
 export const Route = createFileRoute("/notifications")({
+  head: () =>
+    pageHead({
+      title: "notifications",
+      description: "Your private secretsky notifications.",
+      path: "/notifications",
+      robots: "noindex, nofollow",
+    }),
   loader: () => getNotificationsData(),
   component: NotificationsPage,
 });
