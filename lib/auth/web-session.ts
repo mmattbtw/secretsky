@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { getConfig } from "../config";
 import { getQueryDb } from "../db";
+import { writeTransaction } from "../db/write-transaction";
 
 export const WEB_SESSION_COOKIE_NAME = "secretsky-session";
 export const LEGACY_SESSION_COOKIE_NAME = "bulletin-session";
@@ -17,7 +18,7 @@ export async function createWebSession(did: string): Promise<string> {
   );
   const db = getQueryDb();
 
-  await db.transaction().execute(async (trx) => {
+  await writeTransaction(db, async (trx) => {
     await trx
       .deleteFrom("webSession")
       .where("expiresAt", "<=", now.toISOString())
@@ -52,7 +53,7 @@ export async function deleteWebSession(token: string): Promise<string | null> {
   const tokenHash = hashToken(token);
   const now = new Date().toISOString();
   const db = getQueryDb();
-  return db.transaction().execute(async (trx) => {
+  return writeTransaction(db, async (trx) => {
     const row = await trx
       .selectFrom("webSession")
       .select("did")

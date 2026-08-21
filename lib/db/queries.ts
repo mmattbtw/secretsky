@@ -4,6 +4,7 @@ import type { NoteImage } from "../note-image";
 import { fallbackNoteStyle, type NoteColor } from "../note-style";
 import { getQueryDb } from "./index";
 import type { DatabaseSchema } from "./schema";
+import { writeTransaction } from "./write-transaction";
 
 type DatabaseConnection = Kysely<DatabaseSchema>;
 
@@ -230,7 +231,7 @@ export async function hasSpaceWatch(spaceUri: string): Promise<boolean> {
 }
 
 export async function hideSyncedSpace(spaceUri: string): Promise<void> {
-  await getQueryDb().transaction().execute(async (trx) => {
+  await writeTransaction(getQueryDb(), async (trx) => {
     await trx.deleteFrom("syncSpace").where("spaceUri", "=", spaceUri).execute();
     await trx.deleteFrom("board").where("spaceUri", "=", spaceUri).execute();
   });
@@ -238,7 +239,7 @@ export async function hideSyncedSpace(spaceUri: string): Promise<void> {
 
 export async function deleteSyncedSpace(spaceUri: string): Promise<void> {
   const db = getQueryDb();
-  const dereferenced = await db.transaction().execute(async (trx) => {
+  const dereferenced = await writeTransaction(db, async (trx) => {
     const blobs = await trx
       .selectFrom("spaceBlob")
       .select("cid")
@@ -344,7 +345,7 @@ export async function deleteSyncedReposExcept(
     .filter((repoDid) => !repoDids.has(repoDid));
   if (staleRepoDids.length === 0) return false;
 
-  const dereferenced = await db.transaction().execute(async (trx) => {
+  const dereferenced = await writeTransaction(db, async (trx) => {
     const cids: string[] = [];
     for (const repoDid of staleRepoDids) {
       const blobs = await trx
@@ -410,7 +411,7 @@ export async function replaceRepoRecords(input: {
 }): Promise<void> {
   const db = getQueryDb();
   const indexedAt = new Date().toISOString();
-  const dereferenced = await db.transaction().execute(async (trx) => {
+  const dereferenced = await writeTransaction(db, async (trx) => {
     await trx
       .deleteFrom("post")
       .where("spaceUri", "=", input.spaceUri)
@@ -545,7 +546,7 @@ export async function getPost(uri: string): Promise<StoredPost | null> {
 
 export async function deleteStoredPost(uri: string): Promise<void> {
   const db = getQueryDb();
-  const dereferenced = await db.transaction().execute(async (trx) => {
+  const dereferenced = await writeTransaction(db, async (trx) => {
     const row = await trx
       .selectFrom("post")
       .select(["spaceUri", "authorDid"])
@@ -590,7 +591,7 @@ export async function applySyncedChanges(
   blobs: SpaceBlob[] = [],
 ): Promise<void> {
   const db = getQueryDb();
-  const dereferenced = await db.transaction().execute(async (trx) => {
+  const dereferenced = await writeTransaction(db, async (trx) => {
     for (const blob of blobs) await insertSpaceBlob(trx, blob);
     for (const change of changes) {
       if (change.kind === "delete") {

@@ -3,30 +3,37 @@ import { BunSqliteDialect } from "kysely-bun-worker/normal";
 import { getConfig } from "../config";
 import type { DatabaseSchema } from "./schema";
 
+export const DATABASE_BUSY_TIMEOUT_MS = 5_000;
+
 let queryDatabase: Kysely<DatabaseSchema> | undefined;
 
 export function getQueryDb(): Kysely<DatabaseSchema> {
   if (!queryDatabase) {
-    queryDatabase = new Kysely<DatabaseSchema>({
-      dialect: new BunSqliteDialect({
-        url: getConfig().databasePath,
-        onCreateConnection: async (connection) => {
-          await connection.executeQuery({
-            sql: "PRAGMA journal_mode = WAL",
-            parameters: [],
-            query: { kind: "RawNode", sqlFragments: [], parameters: [] },
-          } as never);
-          await connection.executeQuery({
-            sql: "PRAGMA foreign_keys = ON",
-            parameters: [],
-            query: { kind: "RawNode", sqlFragments: [], parameters: [] },
-          } as never);
-        },
-      }),
-      plugins: [new CamelCasePlugin()],
-    });
+    queryDatabase = createQueryDatabase(getConfig().databasePath);
   }
   return queryDatabase;
+}
+
+export function createQueryDatabase(databasePath: string): Kysely<DatabaseSchema> {
+  return new Kysely<DatabaseSchema>({
+    dialect: new BunSqliteDialect({
+      url: databasePath,
+      onCreateConnection: async (connection) => {
+        for (const statement of [
+          `PRAGMA busy_timeout = ${DATABASE_BUSY_TIMEOUT_MS}`,
+          "PRAGMA journal_mode = WAL",
+          "PRAGMA foreign_keys = ON",
+        ]) {
+          await connection.executeQuery({
+            sql: statement,
+            parameters: [],
+            query: { kind: "RawNode", sqlFragments: [], parameters: [] },
+          } as never);
+        }
+      },
+    }),
+    plugins: [new CamelCasePlugin()],
+  });
 }
 
 export async function closeDb(): Promise<void> {
