@@ -3,8 +3,10 @@ import { HomeFeed } from "~/components/PrivateFeed";
 import { LoginForm } from "~/components/LoginForm";
 import { SiteHeader } from "~/components/SiteHeader";
 import { getHomeData } from "~/server/page-data.functions";
+import { pageHead } from "~/site-meta";
 
 export const Route = createFileRoute("/")({
+  head: () => pageHead(),
   loader: () => getHomeData(),
   component: HomePage,
 });

@@ -3,11 +3,20 @@ import { LoginForm } from "~/components/LoginForm";
 import { PostThread } from "~/components/PrivateFeed";
 import { SiteHeader } from "~/components/SiteHeader";
 import { getProfilePostPageData } from "~/server/page-data.functions";
+import { pageHead } from "~/site-meta";
 
 export const Route = createFileRoute("/profile/$profile/post/$rkey")({
   loader: ({ params }) =>
     getProfilePostPageData({
       data: { profile: params.profile, rkey: params.rkey },
+    }),
+  head: ({ params }) =>
+    pageHead({
+      title: "private post",
+      description: "A private post shared on secretsky.",
+      path: `/profile/${encodeURIComponent(params.profile)}/post/${encodeURIComponent(params.rkey)}`,
+      robots: "noindex, nofollow",
+      type: "article",
     }),
   component: ProfilePostPage,
 });

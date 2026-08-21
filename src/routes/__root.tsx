@@ -5,19 +5,24 @@ import {
   createRootRoute,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { pageHead } from "~/site-meta";
 import appCss from "~/styles/app.css?url";
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
+  head: () => {
+    const siteHead = pageHead();
+    return {
+      meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "secretsky" },
-      { name: "description", content: "A private microblog built on ATProto Spaces" },
-      { name: "theme-color", content: "#f4f0e7" },
+      { name: "application-name", content: "secretsky" },
+      { name: "apple-mobile-web-app-title", content: "secretsky" },
+      { name: "theme-color", content: "#fff" },
+      ...siteHead.meta,
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
-  }),
+      links: [{ rel: "stylesheet", href: appCss }],
+    };
+  },
   shellComponent: RootDocument,
 });
 

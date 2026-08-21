@@ -1,7 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SiteHeader } from "~/components/SiteHeader";
+import { pageHead } from "~/site-meta";
 
-export const Route = createFileRoute("/about")({ component: AboutPage });
+export const Route = createFileRoute("/about")({
+  head: () =>
+    pageHead({
+      title: "about",
+      description:
+        "How secretsky uses ATProto Spaces for private feeds, mutual follows, replies, and reactions.",
+      path: "/about",
+    }),
+  component: AboutPage,
+});
 
 function AboutPage() {
   return (
