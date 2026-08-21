@@ -95,6 +95,7 @@ textarea { resize: vertical; }
 .login-form { max-width: 560px; margin: 24px 0; }
 .login-form > label { display: block; margin-bottom: 4px; font-weight: bold; }
 .login-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.login-pds-note { max-width: 540px; color: #555; font-size: .85rem; }
 
 input,
 textarea,

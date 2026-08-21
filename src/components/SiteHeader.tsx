@@ -19,9 +19,9 @@ export function SiteHeader({ viewer }: { viewer?: { handle: string | null } | nu
   return (
     <header className="site-header">
       <div className="site-nav">
-        <Link className="wordmark" to="/">secretsky</Link>
+        <Link className="wordmark" to="/" search={{}}>secretsky</Link>
         <nav aria-label="Main navigation">
-          <Link to="/">home</Link>
+          <Link to="/" search={{}}>home</Link>
           {viewer && <Link to="/notifications">notifications</Link>}
           {viewer?.handle && (
             <Link to="/$handle" params={{ handle: viewer.handle }}>@{viewer.handle}</Link>

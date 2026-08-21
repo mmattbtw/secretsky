@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getOAuthClient } from "@/lib/auth/client";
+import { isSpacesCompatibilityError } from "@/lib/auth/spaces-compatibility";
 import { OAUTH_SCOPE } from "@/lib/config";
 import { assertSameOrigin, errorResponse, json } from "~/server/http";
 
@@ -14,6 +15,11 @@ export const Route = createFileRoute("/oauth/login")({
       });
       return json({ redirectUrl: url.toString() });
     } catch (error) {
+      if (isSpacesCompatibilityError(error)) {
+        return json({
+          error: "This account's PDS does not support ATProto Spaces, so it cannot use secretsky.",
+        }, 400);
+      }
       return errorResponse(error, "Could not sign in");
     }
   } } },

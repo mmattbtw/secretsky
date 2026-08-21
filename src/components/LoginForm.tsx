@@ -4,10 +4,10 @@ import {
   useHandleTypeahead,
 } from "./HandleTypeahead";
 
-export function LoginForm() {
+export function LoginForm({ initialError }: { initialError?: string }) {
   const [handle, setHandle] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | undefined>(initialError);
   const typeahead = useHandleTypeahead({ value: handle, onChange: setHandle });
 
   return (
@@ -62,7 +62,11 @@ export function LoginForm() {
           {busy ? "Signing in..." : "Sign in"}
         </button>
       </div>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+      <p className="login-pds-note">
+        You need an account on a Spaces-compatible PDS. Bluesky runs a hosted
+        alpha PDS for testing. <a href="https://atproto.com/blog/atproto-spaces-alpha#a-hosted-pds-for-experimenting">See how to get access.</a>
+      </p>
     </form>
   );
 }
