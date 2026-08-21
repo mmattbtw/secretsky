@@ -52,7 +52,7 @@ bun run start        # start the production server
 
 ## Protocol
 
-The custom Lexicons are in [`lexicons/my`](./lexicons/my). They define private
+The custom Lexicons are in [`lexicons/at`](./lexicons/at). They define private
 follows, posts, replies, reactions, and moderation records under the
 `at.secretsky.*` namespace.
 
