@@ -7,6 +7,7 @@ type ThreadPost = {
   authorDid: string;
   replyParentUri: string | null;
   createdAt: string;
+  indexedAt: string;
 };
 
 export type FeedPagePost<T extends ThreadPost> = T & {
@@ -35,10 +36,10 @@ export function paginateFeedThreads<T extends ThreadPost>(
     const thread = threads.get(root.uri) ?? {
       root,
       replies: [],
-      activityAt: root.createdAt,
+      activityAt: root.indexedAt,
     };
     if (post.uri !== root.uri) thread.replies.push(post);
-    if (post.createdAt > thread.activityAt) thread.activityAt = post.createdAt;
+    if (post.indexedAt > thread.activityAt) thread.activityAt = post.indexedAt;
     threads.set(root.uri, thread);
   }
 
@@ -66,7 +67,7 @@ export function paginateFeedThreads<T extends ThreadPost>(
       .filter(({ replyParentUri }) => replyParentUri === thread.root.uri)
       .sort(
         (left, right) =>
-          right.createdAt.localeCompare(left.createdAt) ||
+          right.indexedAt.localeCompare(left.indexedAt) ||
           left.uri.localeCompare(right.uri),
       )
       .slice(0, replyPreviewSize);

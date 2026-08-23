@@ -143,6 +143,8 @@ a:focus-visible { outline: 2px solid #00e; outline-offset: 1px; }
 
 .post header a { font-weight: bold; }
 .post time { color: #555; font-size: .8rem; }
+.post-meta { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 4px 10px; }
+.post-archived { color: #765900; font-size: .75rem; font-weight: bold; }
 .post > p { margin: 10px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .post-actions { display: flex; flex-wrap: wrap; gap: 5px; }
 .post-actions button { border: 0; padding: 0 4px 0 0; color: #00e; text-decoration: underline; }

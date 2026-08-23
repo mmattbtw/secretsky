@@ -52,24 +52,55 @@ type TestPost = {
   authorDid: string;
   replyParentUri: string | null;
   createdAt: string;
+  indexedAt: string;
 };
 
-function root(key: string, createdAt: string): TestPost {
+function root(key: string, indexedAt: string, createdAt = indexedAt): TestPost {
   return {
     uri: `at://did:plc:owner/space/at.secretsky.feed/self/did:plc:owner/at.secretsky.post/${key}`,
     feedOwnerDid: "did:plc:owner",
     authorDid: "did:plc:owner",
     replyParentUri: null,
     createdAt,
+    indexedAt,
   };
 }
 
-function child(key: string, replyParentUri: string, createdAt: string): TestPost {
+function child(
+  key: string,
+  replyParentUri: string,
+  indexedAt: string,
+  createdAt = indexedAt,
+): TestPost {
   return {
     uri: `at://did:plc:owner/space/at.secretsky.feed/self/did:plc:reply/at.secretsky.post/${key}`,
     feedOwnerDid: "did:plc:owner",
     authorDid: "did:plc:reply",
     replyParentUri,
     createdAt,
+    indexedAt,
   };
 }
+
+test("thread activity and reply previews use ingestion time", () => {
+  const first = root(
+    "first",
+    "2026-01-01T10:00:00.000Z",
+    "2099-01-01T10:00:00.000Z",
+  );
+  const second = root("second", "2026-01-01T12:00:00.000Z");
+  const reply = child(
+    "reply",
+    first.uri,
+    "2026-01-01T11:00:00.000Z",
+    "2099-01-01T11:00:00.000Z",
+  );
+
+  const page = paginateFeedThreads([first, second, reply]);
+
+  assert.deepEqual(
+    page.posts.filter(({ replyParentUri }) => !replyParentUri).map(({ uri }) => uri),
+    [second.uri, first.uri],
+  );
+  assert.equal(page.posts[1]?.threadActivityAt, reply.indexedAt);
+});
