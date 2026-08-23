@@ -150,6 +150,70 @@ a:focus-visible { outline: 2px solid #00e; outline-offset: 1px; }
 .post-actions button { border: 0; padding: 0 4px 0 0; color: #00e; text-decoration: underline; }
 .post-actions button:hover:not(:disabled) { background: transparent; }
 .post-actions button[aria-pressed="true"] { font-weight: bold; text-decoration-thickness: 2px; }
+.post-history-trigger { color: #765900 !important; }
+.post-history-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(17 17 17 / 48%);
+  animation: post-history-fade-in 120ms ease-out;
+}
+.post-history-dialog {
+  width: min(100%, 560px);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: hidden;
+  border: 2px solid #111;
+  background: #fff;
+  box-shadow: 8px 8px 0 rgb(17 17 17 / 32%);
+  animation: post-history-dialog-in 150ms ease-out;
+}
+.post-history-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #999;
+}
+.post-history-header h2 { margin: 0; font-size: 1.25rem; }
+.post-history-header p { margin: 2px 0 0; color: #555; font-size: .8rem; }
+.post-history-close { flex: 0 0 auto; }
+.post-history-dialog button { border: 1px solid #777; padding: 6px 8px; color: #111; text-decoration: none; }
+.post-history-dialog button:hover:not(:disabled) { background: #eee; }
+.post-history-list {
+  max-height: calc(min(720px, 100vh - 40px) - 92px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 20px;
+  list-style: none;
+}
+.post-history-version {
+  padding: 16px 0;
+  border-bottom: 1px dotted #aaa;
+}
+.post-history-version:last-child { border-bottom: 0; }
+.post-history-version-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #765900;
+  font-size: .75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.post-history-version time { color: #555; font-size: .75rem; font-weight: normal; text-transform: none; letter-spacing: normal; }
+.post-history-version p { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-history-version small { display: block; margin-top: 8px; color: #555; }
+@keyframes post-history-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes post-history-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .post-history-backdrop,
+  .post-history-dialog { animation: none; }
+}
 .reaction-tooltip {
   z-index: 50;
   max-width: min(280px, calc(100vw - 20px));

@@ -113,6 +113,68 @@ test("feed reactions retain emoji and group their counts", async () => {
   ]);
 });
 
+test("post edits retain the previous version", async () => {
+  const spaceUri = "at://did:plc:history/space/at.secretsky.feed/self";
+  const postUri = `${spaceUri}/did:plc:history/at.secretsky.post/edit-history`;
+  const firstCreatedAt = "2026-08-20T10:00:00.000Z";
+  const secondCreatedAt = "2026-08-20T10:05:00.000Z";
+
+  await upsertPost({
+    uri: postUri,
+    cid: "history-cid-1",
+    spaceUri,
+    authorDid: "did:plc:history",
+    text: "the first draft",
+    createdAt: firstCreatedAt,
+  });
+  await upsertPost({
+    uri: postUri,
+    cid: "history-cid-2",
+    spaceUri,
+    authorDid: "did:plc:history",
+    text: "the edited post",
+    createdAt: secondCreatedAt,
+  });
+
+  const [post] = await listFeedPosts(
+    spaceUri,
+    "did:plc:history",
+    "did:plc:history",
+  );
+  assert.equal(post.text, "the edited post");
+  assert.equal(post.versions.length, 1);
+  assert.deepEqual(post.versions[0], {
+    postUri,
+    cid: "history-cid-1",
+    text: "the first draft",
+    imageCid: null,
+    imageAlt: null,
+    createdAt: firstCreatedAt,
+    indexedAt: post.versions[0]?.indexedAt,
+  });
+  assert.ok(post.versions[0]?.indexedAt);
+
+  await replaceRepoRecords({
+    spaceUri,
+    authorDid: "did:plc:history",
+    posts: [{
+      uri: postUri,
+      cid: "history-cid-2",
+      text: "the edited post",
+      createdAt: secondCreatedAt,
+    }],
+    removals: [],
+    positions: [],
+  });
+  const [replayedPost] = await listFeedPosts(
+    spaceUri,
+    "did:plc:history",
+    "did:plc:history",
+  );
+  assert.equal(replayedPost.indexedAt, post.indexedAt);
+  assert.equal(replayedPost.versions.length, 1);
+});
+
 test("repository replay keeps the latest reaction per actor and post", async () => {
   const ownerDid = "did:plc:replay-owner";
   const actorDid = "did:plc:replay-actor";

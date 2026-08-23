@@ -259,6 +259,7 @@ export async function deleteSyncedSpace(spaceUri: string): Promise<void> {
       .deleteFrom("privateFollow")
       .where("spaceUri", "=", spaceUri)
       .execute();
+    await trx.deleteFrom("postVersion").where("spaceUri", "=", spaceUri).execute();
     await trx.deleteFrom("post").where("spaceUri", "=", spaceUri).execute();
     await trx.deleteFrom("syncRepo").where("spaceUri", "=", spaceUri).execute();
     await trx.deleteFrom("syncSpace").where("spaceUri", "=", spaceUri).execute();
@@ -366,6 +367,11 @@ export async function deleteSyncedReposExcept(
         .where("authorDid", "=", repoDid)
         .execute();
       await trx
+        .deleteFrom("postVersion")
+        .where("spaceUri", "=", spaceUri)
+        .where("authorDid", "=", repoDid)
+        .execute();
+      await trx
         .deleteFrom("removal")
         .where("spaceUri", "=", spaceUri)
         .where("authorDid", "=", repoDid)
@@ -412,6 +418,26 @@ export async function replaceRepoRecords(input: {
   const db = getQueryDb();
   const indexedAt = new Date().toISOString();
   const dereferenced = await writeTransaction(db, async (trx) => {
+    const currentPosts = await trx
+      .selectFrom("post")
+      .select([
+        "uri",
+        "cid",
+        "spaceUri",
+        "authorDid",
+        "text",
+        "imageCid",
+        "imageAlt",
+        "createdAt",
+        "indexedAt",
+      ])
+      .where("spaceUri", "=", input.spaceUri)
+      .where("authorDid", "=", input.authorDid)
+      .execute();
+    const currentPostsByUri = new Map(
+      currentPosts.map((post) => [post.uri, post]),
+    );
+    await archivePostVersions(trx, currentPosts);
     await trx
       .deleteFrom("post")
       .where("spaceUri", "=", input.spaceUri)
@@ -449,7 +475,9 @@ export async function replaceRepoRecords(input: {
                 spaceUri: input.spaceUri,
                 authorDid: input.authorDid,
               },
-              indexedAt,
+              currentPostsByUri.get(post.uri)?.cid === post.cid
+                ? currentPostsByUri.get(post.uri)?.indexedAt
+                : indexedAt,
             ),
           ),
         )
@@ -553,6 +581,7 @@ export async function deleteStoredPost(uri: string): Promise<void> {
       .where("uri", "=", uri)
       .executeTakeFirst();
     await trx.deleteFrom("post").where("uri", "=", uri).execute();
+    await trx.deleteFrom("postVersion").where("postUri", "=", uri).execute();
     return row ? pruneSpaceBlobs(trx, row.spaceUri, row.authorDid) : [];
   });
   await deleteUnreferencedBlobFiles(db, dereferenced);
@@ -667,6 +696,7 @@ export type FeedPost = {
   replyParentCid: string | null;
   createdAt: string;
   indexedAt: string;
+  versions: PostVersion[];
   reactionCount: number;
   viewerReactionUri: string | null;
   viewerReactionEmoji: string | null;
@@ -676,6 +706,16 @@ export type FeedPost = {
     actors: Array<{ did: string; handle: string | null }>;
   }>;
   hidden: boolean;
+};
+
+export type PostVersion = {
+  postUri: string;
+  cid: string;
+  text: string;
+  imageCid: string | null;
+  imageAlt: string | null;
+  createdAt: string;
+  indexedAt: string;
 };
 
 export type ReplyNotification = {
@@ -815,6 +855,14 @@ export async function listFeedPosts(
     .where("reaction.spaceUri", "=", spaceUri)
     .orderBy("reaction.createdAt", "asc")
     .execute();
+  const versions = await listPostVersions(result.rows.map(({ uri }) => uri));
+  const versionsByPost = new Map<string, PostVersion[]>();
+  for (const version of versions) {
+    versionsByPost.set(version.postUri, [
+      ...(versionsByPost.get(version.postUri) ?? []),
+      version,
+    ]);
+  }
   const countsByPost = new Map<
     string,
     Map<
@@ -844,6 +892,9 @@ export async function listFeedPosts(
   return result.rows.map((row) => ({
     ...row,
     reactionCount: Number(row.reactionCount),
+    versions: (versionsByPost.get(row.uri) ?? []).filter(
+      (version) => version.cid !== row.cid,
+    ),
     reactionEmojiCounts: [...(countsByPost.get(row.uri)?.values() ?? [])]
       .sort(
         (left, right) =>
@@ -957,6 +1008,24 @@ async function upsertPostWith(
   db: DatabaseConnection,
   input: PostInput,
 ): Promise<void> {
+  const current = await db
+    .selectFrom("post")
+    .select([
+      "uri",
+      "cid",
+      "spaceUri",
+      "authorDid",
+      "text",
+      "imageCid",
+      "imageAlt",
+      "createdAt",
+      "indexedAt",
+    ])
+    .where("uri", "=", input.uri)
+    .executeTakeFirst();
+  if (current && current.cid !== input.cid) {
+    await archivePostVersions(db, [current]);
+  }
   await db
     .insertInto("post")
     .values(postValues(input))
@@ -1089,6 +1158,7 @@ async function deleteSyncedRecord(
 ): Promise<void> {
   if (table === "post") {
     await db.deleteFrom("post").where("uri", "=", uri).execute();
+    await db.deleteFrom("postVersion").where("postUri", "=", uri).execute();
   } else if (table === "removal") {
     await db.deleteFrom("removal").where("uri", "=", uri).execute();
   } else if (table === "reaction") {
@@ -1098,6 +1168,58 @@ async function deleteSyncedRecord(
   } else {
     await db.deleteFrom("notePosition").where("uri", "=", uri).execute();
   }
+}
+
+async function archivePostVersions(
+  db: DatabaseConnection,
+  posts: Array<{
+    uri: string;
+    cid: string;
+    spaceUri: string;
+    authorDid: string;
+    text: string;
+    imageCid: string | null;
+    imageAlt: string | null;
+    createdAt: string;
+    indexedAt: string;
+  }>,
+): Promise<void> {
+  if (posts.length === 0) return;
+  await db
+    .insertInto("postVersion")
+    .values(
+      posts.map((post) => ({
+        postUri: post.uri,
+        cid: post.cid,
+        spaceUri: post.spaceUri,
+        authorDid: post.authorDid,
+        text: post.text,
+        imageCid: post.imageCid,
+        imageAlt: post.imageAlt,
+        createdAt: post.createdAt,
+        indexedAt: post.indexedAt,
+      })),
+    )
+    .onConflict((conflict) => conflict.columns(["postUri", "cid"]).doNothing())
+    .execute();
+}
+
+async function listPostVersions(postUris: string[]): Promise<PostVersion[]> {
+  if (postUris.length === 0) return [];
+  return getQueryDb()
+    .selectFrom("postVersion")
+    .select([
+      "postUri",
+      "cid",
+      "text",
+      "imageCid",
+      "imageAlt",
+      "createdAt",
+      "indexedAt",
+    ])
+    .where("postUri", "in", postUris)
+    .orderBy("indexedAt", "desc")
+    .execute();
 }
 
 async function insertSpaceBlob(
