@@ -43,6 +43,17 @@ export type DatabaseSchema = {
     createdAt: string;
     indexedAt: string;
   };
+  postVersion: {
+    postUri: string;
+    cid: string;
+    spaceUri: string;
+    authorDid: string;
+    text: string;
+    imageCid: string | null;
+    imageAlt: string | null;
+    createdAt: string;
+    indexedAt: string;
+  };
   reaction: {
     uri: string;
     cid: string;

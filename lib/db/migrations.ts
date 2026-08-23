@@ -11,6 +11,7 @@ export const INITIAL_MIGRATION_NAME = "001_initial";
 export const REACTION_EMOJI_MIGRATION_NAME = "002_reaction_emoji";
 export const PRIVATE_FOLLOWS_MIGRATION_NAME = "003_private_follows";
 export const OAUTH_LOCK_MIGRATION_NAME = "004_oauth_lock";
+export const POST_VERSIONS_MIGRATION_NAME = "005_post_versions";
 
 const APPLICATION_TABLES = [
   "account",
@@ -24,6 +25,7 @@ const APPLICATION_TABLES = [
   "removal",
   "note_position",
   "post",
+  "post_version",
   "space_blob",
   "sync_repo",
   "sync_space",
@@ -129,6 +131,31 @@ const migrationProvider: MigrationProvider = {
         },
         async down(db) {
           await db.schema.dropTable("authLock").ifExists().execute();
+        },
+      },
+      [POST_VERSIONS_MIGRATION_NAME]: {
+        async up(db) {
+          await db.schema
+            .createTable("postVersion")
+            .addColumn("postUri", "text", (column) => column.notNull())
+            .addColumn("cid", "text", (column) => column.notNull())
+            .addColumn("spaceUri", "text", (column) => column.notNull())
+            .addColumn("authorDid", "text", (column) => column.notNull())
+            .addColumn("text", "text", (column) => column.notNull())
+            .addColumn("imageCid", "text")
+            .addColumn("imageAlt", "text")
+            .addColumn("createdAt", "text", (column) => column.notNull())
+            .addColumn("indexedAt", "text", (column) => column.notNull())
+            .addPrimaryKeyConstraint("postVersionPrimaryKey", ["postUri", "cid"])
+            .execute();
+          await db.schema
+            .createIndex("postVersionUriIndexedIdx")
+            .on("postVersion")
+            .columns(["postUri", "indexedAt desc"])
+            .execute();
+        },
+        async down(db) {
+          await db.schema.dropTable("postVersion").ifExists().execute();
         },
       },
     };

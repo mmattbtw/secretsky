@@ -20,6 +20,15 @@ export type FeedPost = {
   replyParentUri: string | null;
   createdAt: string;
   indexedAt: string;
+  versions: Array<{
+    postUri: string;
+    cid: string;
+    text: string;
+    imageCid: string | null;
+    imageAlt: string | null;
+    createdAt: string;
+    indexedAt: string;
+  }>;
   viewerReactionUri: string | null;
   viewerReactionEmoji: string | null;
   reactionEmojiCounts: Array<{
@@ -506,6 +515,7 @@ function PostItem({
               }}
             >delete</button>
           )}
+          <PostHistory postUri={post.uri} versions={post.versions} />
         </div>
       </Tooltip.Provider>
 
@@ -574,6 +584,95 @@ function PostItem({
           </p>
         )}
     </article>
+  );
+}
+
+function PostHistory({
+  postUri,
+  versions,
+}: {
+  postUri: string;
+  versions: FeedPost["versions"];
+}) {
+  const [open, setOpen] = useState(false);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const dialogId = `post-history-${encodeURIComponent(postUri)}`;
+  const titleId = `${dialogId}-title`;
+
+  useEffect(() => {
+    if (!open) return;
+    closeButton.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  if (versions.length === 0) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="post-history-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={dialogId}
+        onClick={() => setOpen(true)}
+      >
+        history ({versions.length})
+      </button>
+      {open && (
+        <div
+          className="post-history-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setOpen(false);
+          }}
+        >
+          <section
+            id={dialogId}
+            className="post-history-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+          >
+            <header className="post-history-header">
+              <div>
+                <h2 id={titleId}>Version history</h2>
+                <p>{versions.length} previous {versions.length === 1 ? "version" : "versions"}</p>
+              </div>
+              <button
+                ref={closeButton}
+                type="button"
+                className="post-history-close"
+                onClick={() => setOpen(false)}
+              >
+                Close
+              </button>
+            </header>
+            <ol className="post-history-list">
+              {versions.map((version, index) => (
+                <li className="post-history-version" key={version.cid}>
+                  <div className="post-history-version-meta">
+                    <span>Version {versions.length - index}</span>
+                    <time dateTime={version.indexedAt}>
+                      {formatDate(version.indexedAt)}
+                    </time>
+                  </div>
+                  <p>{version.text || "(No text)"}</p>
+                  {version.imageCid && (
+                    <small>
+                      Image attached{version.imageAlt ? `: ${version.imageAlt}` : ""}
+                    </small>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 

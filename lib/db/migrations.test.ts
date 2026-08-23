@@ -6,6 +6,7 @@ import type { DatabaseSchema } from "./schema";
 import {
   INITIAL_MIGRATION_NAME,
   OAUTH_LOCK_MIGRATION_NAME,
+  POST_VERSIONS_MIGRATION_NAME,
   PRIVATE_FOLLOWS_MIGRATION_NAME,
   REACTION_EMOJI_MIGRATION_NAME,
   migrateDatabase,
@@ -21,6 +22,7 @@ test("a fresh database includes emoji reactions", async () => {
       REACTION_EMOJI_MIGRATION_NAME,
       PRIVATE_FOLLOWS_MIGRATION_NAME,
       OAUTH_LOCK_MIGRATION_NAME,
+      POST_VERSIONS_MIGRATION_NAME,
     ]);
     const tables = (await db.introspection.getTables()).map(({ name }) => name);
     assert.equal(tables.includes("removal"), true);
@@ -44,6 +46,7 @@ test("a fresh database includes emoji reactions", async () => {
     assert.equal(tables.includes("private_follow"), true);
     assert.equal(tables.includes("follow_request"), false);
     assert.equal(tables.includes("auth_lock"), true);
+    assert.equal(tables.includes("post_version"), true);
     assert.equal(
       (await db.introspection.getTables()).some(
         ({ name }) => name === "migration",
