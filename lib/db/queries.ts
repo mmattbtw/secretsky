@@ -666,6 +666,7 @@ export type FeedPost = {
   replyParentUri: string | null;
   replyParentCid: string | null;
   createdAt: string;
+  indexedAt: string;
   reactionCount: number;
   viewerReactionUri: string | null;
   viewerReactionEmoji: string | null;
@@ -776,6 +777,7 @@ export async function listFeedPosts(
       p.reply_parent_uri AS replyParentUri,
       p.reply_parent_cid AS replyParentCid,
       p.created_at AS createdAt,
+      p.indexed_at AS indexedAt,
       COUNT(DISTINCT reaction.uri) AS reactionCount,
       MAX(CASE WHEN reaction.author_did = ${viewerDid} THEN reaction.uri END) AS viewerReactionUri,
       MAX(CASE WHEN reaction.author_did = ${viewerDid} THEN reaction.emoji END) AS viewerReactionEmoji,
@@ -793,7 +795,7 @@ export async function listFeedPosts(
       AND reaction.subject_cid = p.cid
     WHERE p.space_uri = ${spaceUri}
     GROUP BY p.uri
-    ORDER BY p.created_at DESC
+    ORDER BY p.indexed_at DESC, p.uri DESC
   `.execute(getQueryDb());
   const reactions = await getQueryDb()
     .selectFrom("reaction")

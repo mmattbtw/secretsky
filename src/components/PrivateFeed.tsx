@@ -6,6 +6,7 @@ import {
   visibleReactionEmojiCounts,
 } from "@/lib/reaction-emoji";
 import { postPermalink } from "@/lib/post-route";
+import { isArchivedPost } from "@/lib/post-time";
 import { getHomeFeedPage } from "~/server/page-data.functions";
 import { submitPostShortcut } from "./form-shortcuts";
 
@@ -18,6 +19,7 @@ export type FeedPost = {
   text: string;
   replyParentUri: string | null;
   createdAt: string;
+  indexedAt: string;
   viewerReactionUri: string | null;
   viewerReactionEmoji: string | null;
   reactionEmojiCounts: Array<{
@@ -369,6 +371,7 @@ function PostItem({
   const handle = post.author?.handle ?? post.authorHandle ?? post.authorDid;
   const children = replies.get(post.uri) ?? [];
   const visibleReactions = visibleReactionEmojiCounts(post.reactionEmojiCounts);
+  const archived = isArchivedPost(post.createdAt, post.indexedAt);
 
   async function react(emoji: string) {
     if (!canWrite || reactionBusy) return;
@@ -419,9 +422,19 @@ function PostItem({
     >
       <header>
         <Link to="/$handle" params={{ handle }}>@{handle}</Link>
-        <a href={postPermalink(post.uri)}>
-          <time dateTime={post.createdAt}>{formatDate(post.createdAt)}</time>
-        </a>
+        <span className="post-meta">
+          {archived && (
+            <span
+              className="post-archived"
+              title={`This post claims to be from ${formatDate(post.createdAt)} but was first seen at ${formatDate(post.indexedAt)}.`}
+            >
+              <span aria-hidden="true">◷</span> Archived from {formatDate(post.createdAt)}
+            </span>
+          )}
+          <a href={postPermalink(post.uri)}>
+            <time dateTime={post.indexedAt}>{formatDate(post.indexedAt)}</time>
+          </a>
+        </span>
       </header>
       <p>{post.text}</p>
       <Tooltip.Provider delayDuration={250} skipDelayDuration={100}>
