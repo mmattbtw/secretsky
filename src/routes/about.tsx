@@ -28,6 +28,8 @@ function AboutPage() {
           <li><a href="https://github.com/mmattbtw/secretsky">GitHub</a></li>
           <li><a href="https://tangled.org/matt.evil.gay/secretsky">Tangled</a></li>
         </ul>
+	<h2>support secretsky</h2>
+	<p>you can support secretsky by supporting its sole developer on their support page here: <a href="https://mmatt.net/support">mmatt.net/support</a></p>
       </article>
     </main>
   );
