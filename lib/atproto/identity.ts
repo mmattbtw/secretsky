@@ -33,6 +33,22 @@ export async function resolvePds(did: string): Promise<string> {
   return pdsUrl;
 }
 
+export async function resolveSpaceHost(did: string): Promise<string> {
+  const doc = await resolveDid(did);
+  const service = doc.service?.find(
+    ({ id }) => id === `${did}#atproto_space_host` || id === "#atproto_space_host",
+  );
+  if (service) {
+    if (typeof service.serviceEndpoint !== "string") {
+      throw new Error(`${did} has an invalid space host endpoint`);
+    }
+    return service.serviceEndpoint;
+  }
+  const pdsUrl = getPdsEndpoint(doc);
+  if (!pdsUrl) throw new Error(`${did} has no space host or PDS endpoint`);
+  return pdsUrl;
+}
+
 export async function resolveIdentifier(identifier: string): Promise<string> {
   if (identifier.startsWith("did:")) {
     if (!isSupportedAtprotoDid(identifier)) {

@@ -42,6 +42,7 @@ export type StoredPost = Omit<
 export type SpaceWatch = {
   spaceUri: string;
   authorityDid: string;
+  spaceRev: string | null;
   registrationExpiresAt: string | null;
   lastError: string | null;
 };
@@ -197,6 +198,7 @@ export async function saveSpaceWatch(input: {
     .values({
       ...input,
       registrationExpiresAt: null,
+      spaceRev: null,
       lastError: null,
       updatedAt: new Date().toISOString(),
     })
@@ -215,6 +217,7 @@ export async function listSpaceWatches(): Promise<SpaceWatch[]> {
     .select([
       "spaceUri",
       "authorityDid",
+      "spaceRev",
       "registrationExpiresAt",
       "lastError",
     ])
@@ -285,6 +288,21 @@ export async function updateSpaceWatch(input: {
       updatedAt: new Date().toISOString(),
     }))
     .where("spaceUri", "=", input.spaceUri)
+    .execute();
+}
+
+export async function advanceSpaceCheckpoint(
+  spaceUri: string,
+  spaceRev: string,
+): Promise<void> {
+  await getQueryDb()
+    .updateTable("syncSpace")
+    .set({ spaceRev })
+    .where("spaceUri", "=", spaceUri)
+    .where((eb) => eb.or([
+      eb("spaceRev", "is", null),
+      eb("spaceRev", "<", spaceRev),
+    ]))
     .execute();
 }
 

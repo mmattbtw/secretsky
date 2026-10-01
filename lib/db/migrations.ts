@@ -12,6 +12,7 @@ export const REACTION_EMOJI_MIGRATION_NAME = "002_reaction_emoji";
 export const PRIVATE_FOLLOWS_MIGRATION_NAME = "003_private_follows";
 export const OAUTH_LOCK_MIGRATION_NAME = "004_oauth_lock";
 export const POST_VERSIONS_MIGRATION_NAME = "005_post_versions";
+export const SPACE_CHECKPOINT_MIGRATION_NAME = "006_space_checkpoint";
 
 const APPLICATION_TABLES = [
   "account",
@@ -156,6 +157,18 @@ const migrationProvider: MigrationProvider = {
         },
         async down(db) {
           await db.schema.dropTable("postVersion").ifExists().execute();
+        },
+      },
+      [SPACE_CHECKPOINT_MIGRATION_NAME]: {
+        async up(db) {
+          // Previous versions never persisted listing cursors. Start every
+          // existing watch with a full listing, preserving its repo index.
+          await db.schema.alterTable("syncSpace")
+            .addColumn("spaceRev", "text").execute();
+        },
+        async down(db) {
+          await db.schema.alterTable("syncSpace")
+            .dropColumn("spaceRev").execute();
         },
       },
     };

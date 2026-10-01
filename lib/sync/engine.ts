@@ -8,6 +8,7 @@ import {
 } from "@atproto/space";
 import { boardUri, connectionsUri } from "../config";
 import {
+  advanceSpaceCheckpoint,
   applySyncedChanges,
   deleteSyncedReposExcept,
   deleteSyncedSpace,
@@ -26,15 +27,17 @@ import {
 import { getOAuthClient, listStoredSessionDids } from "../auth/client";
 import { readBlobFile, storeBlobFile } from "../blob-store";
 import { com } from "../lexicons";
-import { getIdResolver, resolvePds } from "../atproto/identity";
+import { getIdResolver, resolvePds, resolveSpaceHost } from "../atproto/identity";
 import { getMutualsAmong } from "../follows";
 import {
   mintSpaceCredential,
+  throwSpaceResponseError,
   type SpaceCredential,
 } from "../atproto/space-credential";
 import { orderCredentialCandidates } from "./credential-candidates";
 import {
   isSpaceAccessDeniedError,
+  isCredentialInvalidError,
   isSpaceDeletedError,
   isSpaceNotFoundError,
   WatchInvalidatedError,
@@ -44,8 +47,15 @@ import {
   registrationRenewalDelay,
 } from "./registration";
 import { parseChange } from "./change-parser";
+import { catchUpRepos } from "./catch-up";
 
-type NotifyInput = { space: string; repo: string; rev: string };
+type NotifyInput = {
+  space: string;
+  repo: string;
+  repoRev: string;
+  spaceRev: string;
+  prevSpaceRev?: string;
+};
 type OnChange = (space: string) => void;
 type SyncedBlob = SpaceBlob & { bytes: Uint8Array };
 
@@ -66,7 +76,7 @@ export class SyncEngine {
     private readonly managingAppService: string,
   ) {}
 
-  async resume(): Promise<void> {
+  async resume(full = false): Promise<void> {
     const generations = new Map(this.spaceGenerations);
     const watches = await listSpaceWatches();
     await Promise.all(
@@ -80,7 +90,7 @@ export class SyncEngine {
         }
         this.bindWatch(watch);
         try {
-          await this.refreshWatch(watch);
+          await this.refreshWatch(watch, !full);
         } catch (error) {
           if (isSpaceDeletedError(error)) return;
           if (isInvalidWatchError(error)) {
@@ -118,6 +128,7 @@ export class SyncEngine {
       existing ?? {
         spaceUri: space,
         authorityDid,
+        spaceRev: null,
         registrationExpiresAt: null,
         lastError: null,
       };
@@ -170,11 +181,26 @@ export class SyncEngine {
       return;
     }
     this.watchGenerations.set(watch, generation);
-    await this.enqueue(input.space, input.repo, async () => {
+    await this.enqueue(input.space, "notification", async () => {
       if (this.isWatchInactive(watch)) return;
-      await this.syncRepo(watch, input.repo);
-      if (this.isWatchInactive(watch)) return;
-      this.onChange(input.space);
+      // Serialize catch-up per space. Always list from the safely processed
+      // checkpoint, including on gaps and out-of-order notifications.
+      await this.reconciliations.get(input.space);
+      const current = (await listSpaceWatches()).find(
+        (item) => item.spaceUri === input.space,
+      );
+      if (!current || this.isWatchInactive(watch)) return;
+      if (current.spaceRev && input.spaceRev <= current.spaceRev) return;
+      watch.spaceRev = current.spaceRev;
+      try {
+        await this.runReconcile(watch, true);
+      } catch (error) {
+        if (!this.isWatchInactive(watch)) {
+          this.scheduleReconcileRetry(watch);
+          await this.recordError(watch.spaceUri, error);
+        }
+        throw error;
+      }
     });
   }
 
@@ -203,10 +229,10 @@ export class SyncEngine {
     this.maintenanceTimers.clear();
   }
 
-  private async runReconcile(watch: SpaceWatch): Promise<void> {
+  private async runReconcile(watch: SpaceWatch, incremental = false): Promise<void> {
     const existing = this.reconciliations.get(watch.spaceUri);
     if (existing) return existing;
-    const task = this.reconcile(watch);
+    const task = this.reconcile(watch, incremental);
     this.reconciliations.set(watch.spaceUri, task);
     try {
       await task;
@@ -217,17 +243,17 @@ export class SyncEngine {
     }
   }
 
-  private async refreshWatch(watch: SpaceWatch): Promise<void> {
+  private async refreshWatch(watch: SpaceWatch, incremental = false): Promise<void> {
     await this.assertBulletinSpace(watch);
-    await this.runReconcile(watch);
+    await this.runReconcile(watch, incremental);
   }
 
-  private async reconcile(watch: SpaceWatch): Promise<void> {
+  private async reconcile(watch: SpaceWatch, incremental: boolean): Promise<void> {
     if (this.isWatchInactive(watch)) return;
     await this.withCredential(watch, async (credential) => {
       let changed = false;
-      const authorityPds = await resolvePds(watch.authorityDid);
-      const authorityClient = credential.client(authorityPds);
+      const authorityPds = await resolveSpaceHost(watch.authorityDid);
+      const authorityClient = credential.client(authorityPds, watch.authorityDid);
       let registrationExpiresAt = watch.registrationExpiresAt;
       if (registrationNeedsRenewal(watch.registrationExpiresAt)) {
         const registered = await authorityClient.call(
@@ -249,36 +275,36 @@ export class SyncEngine {
         this.scheduleRegistrationRenewal(watch, registrationExpiresAt);
       }
 
-      const remoteRepoDids = new Set<string>();
-      let cursor: string | undefined;
-      do {
-        const page = await authorityClient.call(com.atproto.space.listRepos, {
+      const { cursor, repoDids } = await catchUpRepos(
+        (cursor) => authorityClient.call(com.atproto.space.listRepos, {
           space: asStringFormat(watch.spaceUri, "space-ref"),
           limit: 1000,
           cursor,
-        });
-        for (const repo of page.repos) {
-          remoteRepoDids.add(repo.did);
-          if (this.isWatchInactive(watch)) return;
+        }),
+        async (repo) => {
+          this.assertWatchActive(watch);
           const local = await getSyncedRepo(watch.spaceUri, repo.did);
-          if (!local || local.rev !== repo.rev) {
+          if (!local || local.rev < repo.repoRev) {
             await this.enqueue(watch.spaceUri, repo.did, () =>
               this.syncRepoWithCredential(watch, repo.did, credential),
             );
             changed = true;
           }
-        }
-        cursor = page.cursor;
-      } while (cursor);
+        },
+        incremental ? watch.spaceRev ?? undefined : undefined,
+      );
 
       if (this.isWatchInactive(watch)) return;
-      changed =
-        (await deleteSyncedReposExcept(watch.spaceUri, remoteRepoDids)) || changed;
+      if (!incremental || watch.spaceRev === null) {
+        changed =
+          (await deleteSyncedReposExcept(watch.spaceUri, repoDids)) || changed;
+      }
       if (this.isWatchInactive(watch)) return;
       if (watch.spaceUri === boardUri(watch.authorityDid)) {
         await saveBoard(watch.spaceUri, watch.authorityDid);
       }
       await updateSpaceWatch({ spaceUri: watch.spaceUri, lastError: null });
+      if (cursor) await advanceSpaceCheckpoint(watch.spaceUri, cursor);
       if (changed) this.onChange(watch.spaceUri);
     });
   }
@@ -291,17 +317,22 @@ export class SyncEngine {
       throw new InvalidBulletinSpaceError();
     }
     await this.withCredential(watch, async (credential) => {
-      const authorityPds = await resolvePds(watch.authorityDid);
-      const response = await credential.client(authorityPds).call(
+      const authorityPds = await resolveSpaceHost(watch.authorityDid);
+      const response = await credential.client(authorityPds, watch.authorityDid).call(
         com.atproto.simplespace.getSpace,
         { space: asStringFormat(watch.spaceUri, "space-ref") },
       );
       if (
         response.uri !== watch.spaceUri ||
-        response.policy.$type !==
+        response.readPolicy.$type !==
           "com.atproto.simplespace.defs#managingAppPolicy" ||
-        !("managingApp" in response.policy) ||
-        response.policy.managingApp !== this.managingAppService
+        !("managingApp" in response.readPolicy) ||
+        response.readPolicy.managingApp !== this.managingAppService ||
+        response.writePolicy.$type !==
+          "com.atproto.simplespace.defs#managingAppPolicy" ||
+        !("managingApp" in response.writePolicy) ||
+        response.writePolicy.managingApp !== this.managingAppService ||
+        response.appAccess.$type !== "com.atproto.simplespace.defs#open"
       ) {
         throw new InvalidBulletinSpaceError();
       }
@@ -375,16 +406,10 @@ export class SyncEngine {
     }
   }
 
-  private async syncRepo(watch: SpaceWatch, repoDid: string): Promise<void> {
-    await this.withCredential(watch, (credential) =>
-      this.syncRepoWithCredential(watch, repoDid, credential),
-    );
-  }
-
   private async renewRegistration(watch: SpaceWatch): Promise<void> {
     await this.withCredential(watch, async (credential) => {
-      const authorityPds = await resolvePds(watch.authorityDid);
-      const authorityClient = credential.client(authorityPds);
+      const authorityPds = await resolveSpaceHost(watch.authorityDid);
+      const authorityClient = credential.client(authorityPds, watch.authorityDid);
       const registered = await authorityClient.call(
         com.atproto.space.registerNotify,
         {
@@ -462,7 +487,7 @@ export class SyncEngine {
     }
 
     try {
-      const client = credential.client(local.pdsUrl);
+      const client = credential.client(local.pdsUrl, repoDid);
       const state = RepoCommit.fromState(local.ltHash);
       const changes: SyncedChange[] = [];
       let cursor: string | undefined;
@@ -526,6 +551,7 @@ export class SyncEngine {
       });
     } catch (error) {
       if (this.isWatchInactive(watch)) return;
+      if (isCredentialInvalidError(error)) throw error;
       console.warn(`incremental sync fell back to recovery for ${repoDid}`, error);
       await this.recoverRepo(watch, repoDid, credential);
     }
@@ -541,9 +567,9 @@ export class SyncEngine {
     const url = new URL(`${pdsUrl}/xrpc/com.atproto.space.getRepo`);
     url.searchParams.set("space", space);
     url.searchParams.set("repo", repoDid);
-    const response = await credential.fetch(url);
+    const response = await credential.fetch(repoDid, url);
     if (!response.ok) {
-      throw new Error(`Repo recovery failed (${response.status})`);
+      await throwSpaceResponseError(response);
     }
 
     const didKey = await resolveDidKey(repoDid);
@@ -640,7 +666,7 @@ export class SyncEngine {
 
       let bytes = readBlobFile(image.cid) ?? undefined;
       if (!bytes || bytes.length !== image.size) {
-        bytes = await credential.client(pdsUrl).call(
+        bytes = await credential.client(pdsUrl, authorDid).call(
           com.atproto.space.getBlob,
           {
             space: asStringFormat(spaceUri, "space-ref"),
@@ -684,8 +710,8 @@ export class SyncEngine {
           throw error;
         }
         if (isSpaceNotFoundError(error)) throw error;
-        if (attempt > 0) throw error;
         this.credentials.delete(watch.spaceUri);
+        if (attempt > 0) throw error;
       }
     }
     throw new Error("Could not obtain a board sync credential");
@@ -697,7 +723,8 @@ export class SyncEngine {
   ): Promise<SpaceCredential> {
     if (!refresh) {
       const existing = this.credentials.get(watch.spaceUri);
-      if (existing) return existing;
+      if (existing && !existing.needsRefresh()) return existing;
+      this.credentials.delete(watch.spaceUri);
     }
     const sessionDids = await listStoredSessionDids();
     const oauthClient = await getOAuthClient();
@@ -756,9 +783,10 @@ export class SyncEngine {
     const previous = this.jobs.get(key) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(job);
     this.jobs.set(key, next);
-    void next.finally(() => {
+    const cleanup = () => {
       if (this.jobs.get(key) === next) this.jobs.delete(key);
-    });
+    };
+    void next.then(cleanup, cleanup);
     return next;
   }
 

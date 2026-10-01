@@ -52,7 +52,7 @@ export class SyncService {
     this.#heartbeatTimer = setInterval(() => this.#heartbeat(), 20_000);
     if (this.#options.pollInterval) {
       this.#reconcileTimer = setInterval(
-        () => this.#resume(),
+        () => this.#resume(true),
         this.#options.pollInterval,
       );
       this.#reconcileTimer.unref();
@@ -135,7 +135,9 @@ export class SyncService {
         if (
           typeof body.space !== "string" ||
           typeof body.repo !== "string" ||
-          typeof body.rev !== "string"
+          typeof body.repoRev !== "string" ||
+          typeof body.spaceRev !== "string" ||
+          (body.prevSpaceRev !== undefined && typeof body.prevSpaceRev !== "string")
         ) {
           return json(response, 400, { error: "Invalid notification" });
         }
@@ -145,7 +147,14 @@ export class SyncService {
         await verifySyncNotification(authorization, body.space);
         json(response, 200, {});
         void this.#engine
-          .notify({ space: body.space, repo: body.repo, rev: body.rev })
+          .notify({
+            space: body.space,
+            repo: body.repo,
+            repoRev: body.repoRev,
+            spaceRev: body.spaceRev,
+            ...(typeof body.prevSpaceRev === "string"
+              ? { prevSpaceRev: body.prevSpaceRev } : {}),
+          })
           .catch((error) => console.error("notification sync failed", error));
         return;
       }
@@ -171,9 +180,9 @@ export class SyncService {
     }
   }
 
-  #resume(): void {
+  #resume(full = false): void {
     if (this.#resumeTask) return;
-    const task = this.#engine.resume();
+    const task = this.#engine.resume(full);
     this.#resumeTask = task;
     void task
       .catch((error) => console.error("sync reconciliation failed", error))

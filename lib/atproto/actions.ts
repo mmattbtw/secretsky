@@ -77,9 +77,13 @@ async function createFeedSpace(session: OAuthSession): Promise<string> {
   const result = await new Client(session).call(
     com.atproto.simplespace.createSpace,
     {
-      type: SPACE_TYPE,
+      spaceType: SPACE_TYPE,
       skey: "self",
-      policy: {
+      readPolicy: {
+        $type: "com.atproto.simplespace.defs#managingAppPolicy",
+        managingApp: getConfig().managingAppService,
+      },
+      writePolicy: {
         $type: "com.atproto.simplespace.defs#managingAppPolicy",
         managingApp: getConfig().managingAppService,
       },
@@ -289,9 +293,13 @@ async function ensureConnectionsSpace(session: OAuthSession): Promise<string> {
   const result = await new Client(session).call(
     com.atproto.simplespace.createSpace,
     {
-      type: CONNECTIONS_SPACE_TYPE,
+      spaceType: CONNECTIONS_SPACE_TYPE,
       skey: "self",
-      policy: {
+      readPolicy: {
+        $type: "com.atproto.simplespace.defs#managingAppPolicy",
+        managingApp: getConfig().managingAppService,
+      },
+      writePolicy: {
         $type: "com.atproto.simplespace.defs#managingAppPolicy",
         managingApp: getConfig().managingAppService,
       },

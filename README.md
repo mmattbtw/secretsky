@@ -63,6 +63,23 @@ follows, posts, replies, reactions, and moderation records under the
 SQLite is only a local index. The records stored in AT Protocol Spaces are the
 source of truth.
 
+Spaces dependencies are pinned to the October 1, 2026 release,
+`0.0.0-spaces-alpha-20261001173819`. The client schemas follow the
+[combined upstream implementation](https://github.com/bluesky-social/atproto/tree/679724ad62eb9a02f7f40429c3c4fdd65d3e4c79).
+Credential signing uses the SDK's HTTP Message Signature helpers. The PDS and
+space authority continue to own credential validation, revocation, writer
+sequencing, and repo-host notification delivery.
+
+On upgrade, run `bun run migrate` with the deployment's environment, or let the
+sync service apply migrations at startup. Migration `006_space_checkpoint`
+adds a nullable per-space checkpoint without changing existing indexed records.
+Existing watches bootstrap through a full listing; subsequent startup and
+notification catch-up resume from the last successfully processed listing.
+When polling is configured, periodic full reconciliation still removes writers
+absent from the authority's listing. Credentials and ephemeral keys are kept only in memory, so restarting
+discards the old DPoP credentials. Space policies and member permissions live
+on the authority, which must run its own upstream migrations.
+
 See [`DEPLOY.md`](./DEPLOY.md) for deployment and DNS setup.
 
 ## Credits

@@ -1,5 +1,10 @@
 import { LexError } from "@atproto/lex-data";
 
+export function isCredentialInvalidError(error: unknown): boolean {
+  return error instanceof LexError &&
+    (error.error === "CredentialRevoked" || error.error === "JwtExpired");
+}
+
 export class WatchInvalidatedError extends Error {
   constructor() {
     super("Board subscription was invalidated");

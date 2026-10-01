@@ -5,6 +5,8 @@ process.env.DATABASE_PATH = ":memory:";
 
 const { migrate } = await import("./migrations");
 const {
+  advanceSpaceCheckpoint,
+  listSpaceWatches,
   deleteSyncedReposExcept,
   getAccount,
   getPost,
@@ -421,4 +423,18 @@ test("reconciliation removes repositories absent from the remote space", async (
     await deleteSyncedReposExcept(spaceUri, new Set([retainedDid])),
     false,
   );
+});
+
+
+test("space checkpoints persist and never move backward on duplicate or stale work", async () => {
+  const spaceUri = "at://did:plc:checkpoint/space/at.secretsky.feed/self";
+  await saveSpaceWatch({ spaceUri, authorityDid: "did:plc:checkpoint" });
+  const checkpoint = async () => (await listSpaceWatches()).find((watch) => watch.spaceUri === spaceUri)?.spaceRev;
+  assert.equal(await checkpoint(), null);
+  await advanceSpaceCheckpoint(spaceUri, "3lzzzzzzzzzaa");
+  await advanceSpaceCheckpoint(spaceUri, "3lzzzzzzzzzab");
+  await advanceSpaceCheckpoint(spaceUri, "3lzzzzzzzzzaa");
+  await advanceSpaceCheckpoint(spaceUri, "3lzzzzzzzzzab");
+  await saveSpaceWatch({ spaceUri, authorityDid: "did:plc:checkpoint" });
+  assert.equal(await checkpoint(), "3lzzzzzzzzzab");
 });

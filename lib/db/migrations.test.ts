@@ -4,6 +4,7 @@ import { CamelCasePlugin, Kysely, sql } from "kysely";
 import { BunSqliteDialect } from "kysely-bun-worker/normal";
 import type { DatabaseSchema } from "./schema";
 import {
+  SPACE_CHECKPOINT_MIGRATION_NAME,
   INITIAL_MIGRATION_NAME,
   OAUTH_LOCK_MIGRATION_NAME,
   POST_VERSIONS_MIGRATION_NAME,
@@ -23,6 +24,7 @@ test("a fresh database includes emoji reactions", async () => {
       PRIVATE_FOLLOWS_MIGRATION_NAME,
       OAUTH_LOCK_MIGRATION_NAME,
       POST_VERSIONS_MIGRATION_NAME,
+      SPACE_CHECKPOINT_MIGRATION_NAME,
     ]);
     const tables = (await db.introspection.getTables()).map(({ name }) => name);
     assert.equal(tables.includes("removal"), true);
@@ -73,3 +75,24 @@ async function migrationNames(
   `.execute(db);
   return result.rows.map(({ name }) => name);
 }
+
+
+test("the checkpoint migration upgrades existing watches without deleting their state", async () => {
+  const db = createDatabase();
+  try {
+    await migrateDatabase(db);
+    // Reconstruct the already-applied 005 schema and migration ledger.
+    await sql`ALTER TABLE sync_space DROP COLUMN space_rev`.execute(db);
+    await sql`DELETE FROM kysely_migration WHERE name = ${SPACE_CHECKPOINT_MIGRATION_NAME}`.execute(db);
+    await sql`INSERT INTO sync_space (space_uri, authority_did, registration_expires_at, updated_at)
+      VALUES ('at://space', 'did:plc:owner', '2026-10-02', '2026-10-01')`.execute(db);
+    await migrateDatabase(db);
+    await migrateDatabase(db);
+    const result = await sql<{ spaceRev: string | null; registrationExpiresAt: string }>`
+      SELECT space_rev, registration_expires_at FROM sync_space WHERE space_uri = 'at://space'
+    `.execute(db);
+    assert.deepEqual(result.rows, [{ spaceRev: null, registrationExpiresAt: "2026-10-02" }]);
+  } finally {
+    await db.destroy();
+  }
+});

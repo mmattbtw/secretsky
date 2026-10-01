@@ -1,5 +1,6 @@
 import type { OAuthSession } from "@atproto/oauth-client-node";
 import { ScopePermissions } from "@atproto/oauth-scopes";
+import { isValidDid } from "@atproto/syntax";
 import {
   BOARD_SKEY,
   CONNECTIONS_SPACE_TYPE,
@@ -27,6 +28,9 @@ export function bulletinCapabilitiesFromScope(
   viewerDid: string,
   ownerDid: string,
 ): BulletinCapabilities {
+  if (!isValidDid(viewerDid) || !isValidDid(ownerDid)) {
+    return { canCreateBoard: false, canCreateNote: false, canManageFollows: false };
+  }
   const permissions = new ScopePermissions(scope);
   return {
     canCreateBoard:

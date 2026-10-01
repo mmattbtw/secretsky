@@ -1,41 +1,53 @@
 import { Client, XrpcResponseError } from "@atproto/lex-client";
 import { LexError } from "@atproto/lex-data";
 import { asStringFormat } from "@atproto/lex-schema";
-import { JoseKey } from "@atproto/jwk-jose";
+import { P256Keypair } from "@atproto/crypto";
 import type { OAuthSession } from "@atproto/oauth-client-node";
-import { createDpopProof } from "@atproto/space";
+import { createSpaceSigHeaders, parseSpaceToken } from "@atproto/space";
+import { isValidDid } from "@atproto/syntax";
 import { com } from "../lexicons";
-import { resolvePds } from "./identity";
+import { resolveSpaceHost } from "./identity";
 
 const GET_SPACE_CREDENTIAL_PATH =
   "/xrpc/com.atproto.space.getSpaceCredential";
 
 export class SpaceCredential {
+  readonly expiresAt: number;
+
   constructor(
     readonly token: string,
-    readonly key: JoseKey,
+    readonly key: P256Keypair,
     private readonly fetchImpl: typeof fetch = fetch,
-  ) {}
+  ) {
+    this.expiresAt = parseSpaceToken("credential", token).payload.exp * 1000;
+  }
+
+  needsRefresh(now = Date.now()): boolean {
+    return now >= this.expiresAt - 5_000;
+  }
 
   fetch = async (
+    audience: string,
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
     const request = new Request(input, { ...init, redirect: "error" });
-    request.headers.set("authorization", `DPoP ${this.token}`);
-    request.headers.set(
-      "dpop",
-      await createDpopProof(this.key, {
-        htm: request.method,
-        htu: request.url,
-        credential: this.token,
-      }),
-    );
+    if (!isValidDid(audience)) throw new Error("Invalid space audience DID");
+    const headers = await createSpaceSigHeaders(this.key, {
+      authorization: `Atproto-Space ${this.token}`,
+      audience,
+    });
+    for (const [name, value] of Object.entries(headers)) {
+      request.headers.set(name, value);
+    }
     return this.fetchImpl(request);
   };
 
-  client(service: string): Client {
-    return new Client({ service, fetch: this.fetch });
+  client(service: string, audience: string): Client {
+    return new Client({
+      service,
+      fetch: (input, init) => this.fetch(audience, input, init),
+    });
   }
 }
 
@@ -50,8 +62,8 @@ export async function mintSpaceCredential(
   );
   const authority = space.match(/^at:\/\/(did:[^/]+)\/space\//)?.[1];
   if (!authority) throw new Error("Invalid space URI");
-  const authorityPds = await resolvePds(authority);
-  const key = await JoseKey.generate(["ES256"]);
+  const authorityPds = await resolveSpaceHost(authority);
+  const key = await P256Keypair.create();
   const credential = await exchangeSpaceCredential({
     authorityPds,
     delegationToken: delegation.token,
@@ -65,7 +77,7 @@ export async function exchangeSpaceCredential(input: {
   authorityPds: string;
   delegationToken: string;
   space: string;
-  key: JoseKey;
+  key: P256Keypair;
   fetchImpl?: typeof fetch;
 }): Promise<string> {
   const url = new URL(GET_SPACE_CREDENTIAL_PATH, input.authorityPds);
@@ -79,13 +91,12 @@ export async function exchangeSpaceCredential(input: {
     },
     body: JSON.stringify({ space: input.space }),
   });
-  request.headers.set(
-    "dpop",
-    await createDpopProof(input.key, {
-      htm: request.method,
-      htu: request.url,
-    }),
-  );
+  const headers = await createSpaceSigHeaders(input.key, {
+    authorization: `Bearer ${input.delegationToken}`,
+  });
+  for (const [name, value] of Object.entries(headers)) {
+    request.headers.set(name, value);
+  }
 
   const response = await (input.fetchImpl ?? fetch)(request);
   const body = await readJson(response);
@@ -131,4 +142,12 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+export async function throwSpaceResponseError(response: Response): Promise<never> {
+  const body = asObject(await readJson(response));
+  throw new LexError(
+    typeof body?.error === "string" ? body.error : "UpstreamFailure",
+    typeof body?.message === "string" ? body.message : `Space request failed (${response.status})`,
+  );
 }
