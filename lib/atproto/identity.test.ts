@@ -65,7 +65,7 @@ test("identity resolution preserves a supported did:web", async () => {
   }
 });
 
-test("space hosts use their dedicated service and fall back only when it is absent", async () => {
+test("space hosts use the PDS and ignore obsolete dedicated services", async () => {
   const { resolveSpaceHost } = await import("./identity");
   const resolver = getIdResolver().did;
   const originalResolve = resolver.resolve;
@@ -76,14 +76,16 @@ test("space hosts use their dedicated service and fall back only when it is abse
       id: did,
       service: [pds, { id: `${did}#atproto_space_host`, type: "AtprotoSpaceService", serviceEndpoint: "https://authority.example" }],
     });
-    assert.equal(await resolveSpaceHost(did), "https://authority.example");
+    assert.equal(await resolveSpaceHost(did), "https://pds.example");
     resolver.resolve = async () => ({ id: did, service: [pds] });
     assert.equal(await resolveSpaceHost(did), "https://pds.example");
     resolver.resolve = async () => ({
       id: did,
       service: [pds, { id: `${did}#atproto_space_host`, type: "AtprotoSpaceService", serviceEndpoint: { endpoint: "invalid" } }],
     });
-    await assert.rejects(resolveSpaceHost(did), /invalid space host endpoint/);
+    assert.equal(await resolveSpaceHost(did), "https://pds.example");
+    resolver.resolve = async () => ({ id: did, service: [] });
+    await assert.rejects(resolveSpaceHost(did), /no PDS endpoint/);
   } finally {
     resolver.resolve = originalResolve;
   }

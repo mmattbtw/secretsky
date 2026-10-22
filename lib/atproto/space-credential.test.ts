@@ -4,7 +4,7 @@ import { com } from "../lexicons";
 import { asStringFormat } from "@atproto/lex-schema";
 import { XrpcResponseError } from "@atproto/lex-client";
 import { P256Keypair } from "@atproto/crypto";
-import { createSpaceToken, verifySpaceSignature } from "@atproto/space";
+import { createSpaceToken, verifyCredentialSig } from "@atproto/space";
 import {
   exchangeSpaceCredential,
   SpaceCredential,
@@ -17,7 +17,7 @@ const SPACE =
   "at://did:plc:owner/space/at.secretsky.feed/self";
 const DELEGATION_TOKEN = "delegation-token";
 
-test("credential exchange binds through an HTTP message signature", async () => {
+test("credential exchange binds its key and delegation token through the request body", async () => {
   const key = await P256Keypair.create();
   let requestSeen = false;
 
@@ -34,19 +34,15 @@ test("credential exchange binds through an HTTP message signature", async () => 
       assert.equal(request.redirect, "error");
       assert.equal(
         request.headers.get("authorization"),
-        `Bearer ${DELEGATION_TOKEN}`,
+        null,
       );
-      assert.deepEqual(await request.json(), { space: SPACE });
+      assert.deepEqual(await request.json(), {
+        space: SPACE, credentialKid: key.did(), delegationToken: DELEGATION_TOKEN,
+      });
 
       assert.equal(request.headers.has("dpop"), false);
-      assert.equal(
-        request.headers.get("signature-input"),
-        `atproto-space=("authorization");keyid="${key.did()}"`,
-      );
-      assert.equal(
-        await verifySpaceSignature(Object.fromEntries(request.headers)),
-        key.did(),
-      );
+      assert.equal(request.headers.has("signature-input"), false);
+      assert.equal(request.headers.has("signature"), false);
 
       return Response.json({ credential: "space-credential" });
     },
@@ -87,13 +83,13 @@ test("credential reads bind to each repo DID even on a shared PDS", async () => 
   const credential = new SpaceCredential(token, key, async (input) => {
     const request = input instanceof Request ? input : new Request(input);
     assert.equal(request.redirect, "error");
-    assert.equal(request.headers.get("authorization"), `Atproto-Space ${token}`);
+    assert.equal(request.headers.get("authorization"), `Atproto-Space-Credential ${token}`);
     assert.equal(request.headers.has("dpop"), false);
     assert.equal(request.headers.get("signature-input"),
-      'atproto-space=("authorization" "atproto-space-audience")');
+      'atproto-space-credential=("authorization" "atproto-space-audience");tag="atproto-space-credential"');
     const headers = Object.fromEntries(request.headers);
-    assert.equal(await verifySpaceSignature(headers, asStringFormat(key.did(), "did")), key.did());
-    await assert.rejects(verifySpaceSignature({
+    await verifyCredentialSig(headers, asStringFormat(key.did(), "did"));
+    await assert.rejects(verifyCredentialSig({
       ...headers, "atproto-space-audience": "did:plc:wrong",
     }, asStringFormat(key.did(), "did")));
     audiences.push(headers["atproto-space-audience"]);
@@ -111,7 +107,7 @@ test("host clients use the bare authority DID and credentials refresh before exp
   const credential = new SpaceCredential(token, key, async (input) => {
     const request = input instanceof Request ? input : new Request(input);
     assert.equal(request.headers.get("atproto-space-audience"), "did:plc:owner");
-    assert.equal(await verifySpaceSignature(Object.fromEntries(request.headers), asStringFormat(key.did(), "did")), key.did());
+    await verifyCredentialSig(Object.fromEntries(request.headers), asStringFormat(key.did(), "did"));
     return Response.json({ repos: [] });
   });
   assert.equal(credential.needsRefresh(credential.expiresAt - 5_001), false);

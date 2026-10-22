@@ -34,7 +34,7 @@ export class SpaceCredential {
     const request = new Request(input, { ...init, redirect: "error" });
     if (!isValidDid(audience)) throw new Error("Invalid space audience DID");
     const headers = await createSpaceSigHeaders(this.key, {
-      authorization: `Atproto-Space ${this.token}`,
+      authorization: `Atproto-Space-Credential ${this.token}`,
       audience,
     });
     for (const [name, value] of Object.entries(headers)) {
@@ -86,17 +86,14 @@ export async function exchangeSpaceCredential(input: {
     redirect: "error",
     headers: {
       accept: "application/json",
-      authorization: `Bearer ${input.delegationToken}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ space: input.space }),
+    body: JSON.stringify({
+      space: input.space,
+      credentialKid: input.key.did(),
+      delegationToken: input.delegationToken,
+    }),
   });
-  const headers = await createSpaceSigHeaders(input.key, {
-    authorization: `Bearer ${input.delegationToken}`,
-  });
-  for (const [name, value] of Object.entries(headers)) {
-    request.headers.set(name, value);
-  }
 
   const response = await (input.fetchImpl ?? fetch)(request);
   const body = await readJson(response);

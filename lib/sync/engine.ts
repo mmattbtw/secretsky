@@ -3,8 +3,12 @@ import { asStringFormat } from "@atproto/lex-schema";
 import {
   RepoCommit,
   verifyCommit,
-  verifyRepoCarFull,
-  type SignedCommit,
+  verifyRepoStarFull,
+  COMMIT_MAC_TYPE,
+  MAC_HEADER,
+  parseMacHeader,
+  SpaceMacError,
+  type Commit,
 } from "@atproto/space";
 import { boardUri, connectionsUri } from "../config";
 import {
@@ -27,7 +31,7 @@ import {
 import { getOAuthClient, listStoredSessionDids } from "../auth/client";
 import { readBlobFile, storeBlobFile } from "../blob-store";
 import { com } from "../lexicons";
-import { getIdResolver, resolvePds, resolveSpaceHost } from "../atproto/identity";
+import { resolvePds, resolveSpaceHost } from "../atproto/identity";
 import { getMutualsAmong } from "../follows";
 import {
   mintSpaceCredential,
@@ -48,6 +52,7 @@ import {
 } from "./registration";
 import { parseChange } from "./change-parser";
 import { catchUpRepos } from "./catch-up";
+import { withRepoMac } from "./repo-mac";
 
 type NotifyInput = {
   space: string;
@@ -491,15 +496,30 @@ export class SyncEngine {
       const state = RepoCommit.fromState(local.ltHash);
       const changes: SyncedChange[] = [];
       let cursor: string | undefined;
-      let commit: SignedCommit | undefined;
+      let commit: Commit | undefined;
 
       do {
-        const page = await client.call(com.atproto.space.listRepoOps, {
-          space: asStringFormat(watch.spaceUri, "space-ref"),
-          repo: asStringFormat(repoDid, "did"),
-          since: local.rev,
-          cursor,
-          limit: 1000,
+        const page = await withRepoMac(repoDid, async ({ sharedSecret, headers }) => {
+          const response = await client.xrpc(com.atproto.space.listRepoOps, {
+            params: {
+              space: asStringFormat(watch.spaceUri, "space-ref"),
+              repo: asStringFormat(repoDid, "did"),
+              since: local.rev,
+              cursor,
+              limit: 1000,
+            },
+            headers,
+          });
+          const page = response.body;
+          if (page.commit && !verifyCommit(page.commit, {
+            space: watch.spaceUri,
+            repo: repoDid,
+            sharedSecret,
+            mac: parseMacHeader(response.headers.get(MAC_HEADER) ?? undefined, COMMIT_MAC_TYPE),
+          })) {
+            throw new SpaceMacError("Incremental commit failed verification");
+          }
+          return page;
         });
         for (const op of page.ops) {
           state.applyOp({
@@ -519,18 +539,12 @@ export class SyncEngine {
           if (change) changes.push(change);
         }
         cursor = page.cursor;
-        if (page.commit) commit = asSignedCommit(page.commit);
+        if (page.commit) commit = page.commit;
       } while (cursor);
 
       if (!commit) throw new Error("Incremental sync did not reach a commit");
-      const didKey = await resolveDidKey(repoDid);
-      const valid = await verifyCommit(
-        commit,
-        { space: watch.spaceUri, author: repoDid, rev: commit.rev },
-        didKey,
-      );
-      if (!valid || !state.matches(commit)) {
-        throw new Error("Incremental sync hash mismatch");
+      if (!state.matches(commit)) {
+        throw new Error("Incremental sync data mismatch");
       }
 
       const blobs = await this.fetchImageBlobs(
@@ -547,7 +561,7 @@ export class SyncEngine {
         pdsUrl: local.pdsUrl,
         rev: commit.rev,
         ltHash: state.setHash.state(),
-        commitHash: commit.hash,
+        commitHash: commit.data,
       });
     } catch (error) {
       if (this.isWatchInactive(watch)) return;
@@ -567,16 +581,19 @@ export class SyncEngine {
     const url = new URL(`${pdsUrl}/xrpc/com.atproto.space.getRepo`);
     url.searchParams.set("space", space);
     url.searchParams.set("repo", repoDid);
-    const response = await credential.fetch(repoDid, url);
-    if (!response.ok) {
-      await throwSpaceResponseError(response);
-    }
-
-    const didKey = await resolveDidKey(repoDid);
-    const recovered = await verifyRepoCarFull(
-      [new Uint8Array(await response.arrayBuffer())],
-      { space, author: repoDid, didKey },
-    );
+    const recovered = await withRepoMac(repoDid, async ({ sharedSecret, headers }) => {
+      const response = await credential.fetch(repoDid, url, { headers });
+      if (!response.ok) await throwSpaceResponseError(response);
+      return verifyRepoStarFull(
+        [new Uint8Array(await response.arrayBuffer())],
+        {
+          space,
+          repo: repoDid,
+          sharedSecret,
+          mac: parseMacHeader(response.headers.get(MAC_HEADER) ?? undefined, COMMIT_MAC_TYPE),
+        },
+      );
+    });
     const posts: Parameters<typeof replaceRepoRecords>[0]["posts"] = [];
     const removals: Parameters<typeof replaceRepoRecords>[0]["removals"] = [];
     const reactions: NonNullable<Parameters<typeof replaceRepoRecords>[0]["reactions"]> = [];
@@ -629,8 +646,8 @@ export class SyncEngine {
       repoDid,
       pdsUrl,
       rev: recovered.commit.rev,
-      ltHash: recovered.repo.setHash.state(),
-      commitHash: recovered.commit.hash,
+      ltHash: RepoCommit.fromRecords(recovered.records).setHash.state(),
+      commitHash: recovered.commit.data,
     });
   }
 
@@ -822,26 +839,8 @@ function authorityFromSpace(space: string): string {
   return authority;
 }
 
-async function resolveDidKey(did: string): Promise<string> {
-  const key = await getIdResolver().did.resolveAtprotoKey(did);
-  if (!key) throw new Error(`Could not resolve signing key for ${did}`);
-  return key;
-}
-
 function registrationNeedsRenewal(expiresAt: string | null): boolean {
   return !expiresAt || Date.parse(expiresAt) - Date.now() < 60 * 60 * 1000;
-}
-
-function asSignedCommit(commit: {
-  ver: number;
-  hash: Uint8Array;
-  ikm: Uint8Array;
-  sig: Uint8Array;
-  mac: Uint8Array;
-  rev: string;
-}): SignedCommit {
-  if (commit.ver !== 1) throw new Error(`Unsupported commit version ${commit.ver}`);
-  return commit as SignedCommit;
 }
 
 function stripPost(value: Extract<SyncedChange, { kind: "post" }>["value"]) {

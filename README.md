@@ -63,11 +63,15 @@ follows, posts, replies, reactions, and moderation records under the
 SQLite is only a local index. The records stored in AT Protocol Spaces are the
 source of truth.
 
-Spaces dependencies are pinned to the October 1, 2026 release,
-`0.0.0-spaces-alpha-20261001173819`. The client schemas follow the
-[combined upstream implementation](https://github.com/bluesky-social/atproto/tree/679724ad62eb9a02f7f40429c3c4fdd65d3e4c79).
-Credential signing uses the SDK's HTTP Message Signature helpers. The PDS and
-space authority continue to own credential validation, revocation, writer
+Spaces dependencies are pinned to the October 22, 2026 release,
+`0.0.0-spaces-alpha-20261022141228`. The client schemas follow the
+[combined upstream implementation](https://github.com/bluesky-social/atproto/tree/ac0c9f15392f6f0298d71dc52aa88c05036150be).
+Credential exchange sends the delegation token and binding key in the request
+body. Credential presentation uses the SDK's tagged HTTP Message Signatures.
+The sync service uses SDK helpers for per-request MACs and STAR repo verification,
+resolves authorities through their PDS, and refreshes KEM keys on verification
+failures. The PDS and space authority continue to own credential validation,
+revocation, writer
 sequencing, and repo-host notification delivery.
 
 On upgrade, run `bun run migrate` with the deployment's environment, or let the
@@ -76,9 +80,14 @@ adds a nullable per-space checkpoint without changing existing indexed records.
 Existing watches bootstrap through a full listing; subsequent startup and
 notification catch-up resume from the last successfully processed listing.
 When polling is configured, periodic full reconciliation still removes writers
-absent from the authority's listing. Credentials and ephemeral keys are kept only in memory, so restarting
-discards the old DPoP credentials. Space policies and member permissions live
-on the authority, which must run its own upstream migrations.
+absent from the authority's listing. Credentials and ephemeral keys are kept
+only in memory, so restarting discards the old credentials.
+
+The October 22 update needs no new SQLite migration. Stored repo digests and
+LtHash state remain valid, and existing checkpoints resume normally. Restart
+both app and sync processes after installing the update. Space policies and
+member permissions live on the authority, which must run its own upstream
+migrations.
 
 See [`DEPLOY.md`](./DEPLOY.md) for deployment and DNS setup.
 

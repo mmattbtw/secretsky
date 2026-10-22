@@ -12,7 +12,7 @@ function repo(spaceRev: string, repoRev = spaceRev): Repo {
     did: asStringFormat("did:plc:writer", "did"),
     repoRev: asStringFormat(repoRev, "tid"),
     spaceRev: asStringFormat(spaceRev, "tid"),
-    hash: new Uint8Array(32),
+    data: new Uint8Array(32),
   };
 }
 
