@@ -28,9 +28,9 @@ import { Route as OauthLoginRouteImport } from './routes/oauth.login'
 import { Route as OauthLogoutRouteImport } from './routes/oauth.logout'
 import { Route as PostPostIdRouteImport } from './routes/post.$postId'
 import { Route as SyncHealthRouteImport } from './routes/sync.health'
-import { Route as XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRouteImport } from './routes/xrpc.com[.]atproto[.]simplespace[.]checkUserAccess'
-import { Route as XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRouteImport } from './routes/xrpc.com[.]atproto[.]space[.]notifySpaceDeleted'
-import { Route as XrpcComDotatprotoDotspaceDotnotifyWriteRouteImport } from './routes/xrpc.com[.]atproto[.]space[.]notifyWrite'
+import { Route as XrpcComDotatprotoDotmanagedspaceDotcheckAccessRouteImport } from './routes/xrpc.com[.]atproto[.]managedspace[.]checkAccess'
+import { Route as XrpcComDotatprotoDotspaceDotconfirmRegistrationRouteImport } from './routes/xrpc.com[.]atproto[.]space[.]confirmRegistration'
+import { Route as XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRouteImport } from './routes/xrpc.com[.]atproto[.]space[.]notifySpaceUpdate'
 import { Route as ProfileProfilePostRkeyRouteImport } from './routes/profile.$profile.post.$rkey'
 
 const IndexRoute = IndexRouteImport.update({
@@ -129,22 +129,22 @@ const SyncHealthRoute = SyncHealthRouteImport.update({
   path: '/sync/health',
   getParentRoute: () => rootRouteImport,
 } as any)
-const XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute =
-  XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRouteImport.update({
-    id: '/xrpc/com.atproto.simplespace.checkUserAccess',
-    path: '/xrpc/com.atproto.simplespace.checkUserAccess',
+const XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute =
+  XrpcComDotatprotoDotmanagedspaceDotcheckAccessRouteImport.update({
+    id: '/xrpc/com.atproto.managedspace.checkAccess',
+    path: '/xrpc/com.atproto.managedspace.checkAccess',
     getParentRoute: () => rootRouteImport,
   } as any)
-const XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute =
-  XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRouteImport.update({
-    id: '/xrpc/com.atproto.space.notifySpaceDeleted',
-    path: '/xrpc/com.atproto.space.notifySpaceDeleted',
+const XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute =
+  XrpcComDotatprotoDotspaceDotconfirmRegistrationRouteImport.update({
+    id: '/xrpc/com.atproto.space.confirmRegistration',
+    path: '/xrpc/com.atproto.space.confirmRegistration',
     getParentRoute: () => rootRouteImport,
   } as any)
-const XrpcComDotatprotoDotspaceDotnotifyWriteRoute =
-  XrpcComDotatprotoDotspaceDotnotifyWriteRouteImport.update({
-    id: '/xrpc/com.atproto.space.notifyWrite',
-    path: '/xrpc/com.atproto.space.notifyWrite',
+const XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute =
+  XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRouteImport.update({
+    id: '/xrpc/com.atproto.space.notifySpaceUpdate',
+    path: '/xrpc/com.atproto.space.notifySpaceUpdate',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ProfileProfilePostRkeyRoute = ProfileProfilePostRkeyRouteImport.update({
@@ -173,9 +173,9 @@ export interface FileRoutesByFullPath {
   '/oauth/logout': typeof OauthLogoutRoute
   '/post/$postId': typeof PostPostIdRoute
   '/sync/health': typeof SyncHealthRoute
-  '/xrpc/com.atproto.simplespace.checkUserAccess': typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
-  '/xrpc/com.atproto.space.notifySpaceDeleted': typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
-  '/xrpc/com.atproto.space.notifyWrite': typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  '/xrpc/com.atproto.managedspace.checkAccess': typeof XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute
+  '/xrpc/com.atproto.space.confirmRegistration': typeof XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute
+  '/xrpc/com.atproto.space.notifySpaceUpdate': typeof XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute
   '/profile/$profile/post/$rkey': typeof ProfileProfilePostRkeyRoute
 }
 export interface FileRoutesByTo {
@@ -198,9 +198,9 @@ export interface FileRoutesByTo {
   '/oauth/logout': typeof OauthLogoutRoute
   '/post/$postId': typeof PostPostIdRoute
   '/sync/health': typeof SyncHealthRoute
-  '/xrpc/com.atproto.simplespace.checkUserAccess': typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
-  '/xrpc/com.atproto.space.notifySpaceDeleted': typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
-  '/xrpc/com.atproto.space.notifyWrite': typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  '/xrpc/com.atproto.managedspace.checkAccess': typeof XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute
+  '/xrpc/com.atproto.space.confirmRegistration': typeof XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute
+  '/xrpc/com.atproto.space.notifySpaceUpdate': typeof XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute
   '/profile/$profile/post/$rkey': typeof ProfileProfilePostRkeyRoute
 }
 export interface FileRoutesById {
@@ -224,9 +224,9 @@ export interface FileRoutesById {
   '/oauth/logout': typeof OauthLogoutRoute
   '/post/$postId': typeof PostPostIdRoute
   '/sync/health': typeof SyncHealthRoute
-  '/xrpc/com.atproto.simplespace.checkUserAccess': typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
-  '/xrpc/com.atproto.space.notifySpaceDeleted': typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
-  '/xrpc/com.atproto.space.notifyWrite': typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  '/xrpc/com.atproto.managedspace.checkAccess': typeof XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute
+  '/xrpc/com.atproto.space.confirmRegistration': typeof XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute
+  '/xrpc/com.atproto.space.notifySpaceUpdate': typeof XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute
   '/profile/$profile/post/$rkey': typeof ProfileProfilePostRkeyRoute
 }
 export interface FileRouteTypes {
@@ -251,9 +251,9 @@ export interface FileRouteTypes {
     | '/oauth/logout'
     | '/post/$postId'
     | '/sync/health'
-    | '/xrpc/com.atproto.simplespace.checkUserAccess'
-    | '/xrpc/com.atproto.space.notifySpaceDeleted'
-    | '/xrpc/com.atproto.space.notifyWrite'
+    | '/xrpc/com.atproto.managedspace.checkAccess'
+    | '/xrpc/com.atproto.space.confirmRegistration'
+    | '/xrpc/com.atproto.space.notifySpaceUpdate'
     | '/profile/$profile/post/$rkey'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -276,9 +276,9 @@ export interface FileRouteTypes {
     | '/oauth/logout'
     | '/post/$postId'
     | '/sync/health'
-    | '/xrpc/com.atproto.simplespace.checkUserAccess'
-    | '/xrpc/com.atproto.space.notifySpaceDeleted'
-    | '/xrpc/com.atproto.space.notifyWrite'
+    | '/xrpc/com.atproto.managedspace.checkAccess'
+    | '/xrpc/com.atproto.space.confirmRegistration'
+    | '/xrpc/com.atproto.space.notifySpaceUpdate'
     | '/profile/$profile/post/$rkey'
   id:
     | '__root__'
@@ -301,9 +301,9 @@ export interface FileRouteTypes {
     | '/oauth/logout'
     | '/post/$postId'
     | '/sync/health'
-    | '/xrpc/com.atproto.simplespace.checkUserAccess'
-    | '/xrpc/com.atproto.space.notifySpaceDeleted'
-    | '/xrpc/com.atproto.space.notifyWrite'
+    | '/xrpc/com.atproto.managedspace.checkAccess'
+    | '/xrpc/com.atproto.space.confirmRegistration'
+    | '/xrpc/com.atproto.space.notifySpaceUpdate'
     | '/profile/$profile/post/$rkey'
   fileRoutesById: FileRoutesById
 }
@@ -326,9 +326,9 @@ export interface RootRouteChildren {
   OauthLoginRoute: typeof OauthLoginRoute
   OauthLogoutRoute: typeof OauthLogoutRoute
   SyncHealthRoute: typeof SyncHealthRoute
-  XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute: typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute
-  XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute: typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute
-  XrpcComDotatprotoDotspaceDotnotifyWriteRoute: typeof XrpcComDotatprotoDotspaceDotnotifyWriteRoute
+  XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute: typeof XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute
+  XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute: typeof XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute
+  XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute: typeof XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute
   ProfileProfilePostRkeyRoute: typeof ProfileProfilePostRkeyRoute
 }
 
@@ -467,25 +467,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SyncHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/xrpc/com.atproto.simplespace.checkUserAccess': {
-      id: '/xrpc/com.atproto.simplespace.checkUserAccess'
-      path: '/xrpc/com.atproto.simplespace.checkUserAccess'
-      fullPath: '/xrpc/com.atproto.simplespace.checkUserAccess'
-      preLoaderRoute: typeof XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRouteImport
+    '/xrpc/com.atproto.managedspace.checkAccess': {
+      id: '/xrpc/com.atproto.managedspace.checkAccess'
+      path: '/xrpc/com.atproto.managedspace.checkAccess'
+      fullPath: '/xrpc/com.atproto.managedspace.checkAccess'
+      preLoaderRoute: typeof XrpcComDotatprotoDotmanagedspaceDotcheckAccessRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/xrpc/com.atproto.space.notifySpaceDeleted': {
-      id: '/xrpc/com.atproto.space.notifySpaceDeleted'
-      path: '/xrpc/com.atproto.space.notifySpaceDeleted'
-      fullPath: '/xrpc/com.atproto.space.notifySpaceDeleted'
-      preLoaderRoute: typeof XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRouteImport
+    '/xrpc/com.atproto.space.confirmRegistration': {
+      id: '/xrpc/com.atproto.space.confirmRegistration'
+      path: '/xrpc/com.atproto.space.confirmRegistration'
+      fullPath: '/xrpc/com.atproto.space.confirmRegistration'
+      preLoaderRoute: typeof XrpcComDotatprotoDotspaceDotconfirmRegistrationRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/xrpc/com.atproto.space.notifyWrite': {
-      id: '/xrpc/com.atproto.space.notifyWrite'
-      path: '/xrpc/com.atproto.space.notifyWrite'
-      fullPath: '/xrpc/com.atproto.space.notifyWrite'
-      preLoaderRoute: typeof XrpcComDotatprotoDotspaceDotnotifyWriteRouteImport
+    '/xrpc/com.atproto.space.notifySpaceUpdate': {
+      id: '/xrpc/com.atproto.space.notifySpaceUpdate'
+      path: '/xrpc/com.atproto.space.notifySpaceUpdate'
+      fullPath: '/xrpc/com.atproto.space.notifySpaceUpdate'
+      preLoaderRoute: typeof XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile/$profile/post/$rkey': {
@@ -527,12 +527,12 @@ const rootRouteChildren: RootRouteChildren = {
   OauthLoginRoute: OauthLoginRoute,
   OauthLogoutRoute: OauthLogoutRoute,
   SyncHealthRoute: SyncHealthRoute,
-  XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute:
-    XrpcComDotatprotoDotsimplespaceDotcheckUserAccessRoute,
-  XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute:
-    XrpcComDotatprotoDotspaceDotnotifySpaceDeletedRoute,
-  XrpcComDotatprotoDotspaceDotnotifyWriteRoute:
-    XrpcComDotatprotoDotspaceDotnotifyWriteRoute,
+  XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute:
+    XrpcComDotatprotoDotmanagedspaceDotcheckAccessRoute,
+  XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute:
+    XrpcComDotatprotoDotspaceDotconfirmRegistrationRoute,
+  XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute:
+    XrpcComDotatprotoDotspaceDotnotifySpaceUpdateRoute,
   ProfileProfilePostRkeyRoute: ProfileProfilePostRkeyRoute,
 }
 export const routeTree = rootRouteImport

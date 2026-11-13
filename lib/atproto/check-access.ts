@@ -1,3 +1,4 @@
+import { isValidDid } from "@atproto/syntax";
 import { connectionsUri, feedUri } from "../config";
 import { canAccessFeed } from "../follows";
 import { verifyManagingAppRequest } from "./service-auth";
@@ -7,7 +8,8 @@ type AccessDependencies = {
   canAccessFeed: typeof canAccessFeed;
 };
 
-export async function checkUserAccess(
+// com.atproto.managedspace.checkAccess: one answer covers both read and write.
+export async function checkAccess(
   request: Request,
   dependencies: AccessDependencies = {
     verify: verifyManagingAppRequest,
@@ -16,25 +18,25 @@ export async function checkUserAccess(
 ): Promise<Response> {
   const url = new URL(request.url);
   const space = url.searchParams.get("space");
-  const user = url.searchParams.get("user");
-  const access = url.searchParams.get("access");
+  const repo = url.searchParams.get("repo");
   const authority = space?.match(/^at:\/\/(did:[^/]+)\/space\//)?.[1];
   if (
-    !space || !user || !authority ||
-    (access !== "read" && access !== "write") ||
-    (access === "write" && url.searchParams.has("clientId")) ||
+    !space || !authority ||
+    (repo !== null && !isValidDid(repo)) ||
     (space !== feedUri(authority) && space !== connectionsUri(authority))
   ) {
     return Response.json({ error: "InvalidRequest" }, { status: 400 });
   }
   try {
     await dependencies.verify(request.headers.get("authorization"), authority);
-    // Both policies retain the app's existing owner/mutual access rules.
-    // appAccess is open; an attested read clientId adds no restriction here.
-    const authorized = space === connectionsUri(authority)
-      ? user === authority
-      : await dependencies.canAccessFeed(user, authority);
-    return Response.json({ authorized });
+    // Both spaces are private: a request without an account is never allowed.
+    // Any app may use them, so an attested clientId adds no restriction.
+    const allowed = repo === null
+      ? false
+      : space === connectionsUri(authority)
+        ? repo === authority
+        : await dependencies.canAccessFeed(repo, authority);
+    return Response.json({ read: allowed, write: allowed });
   } catch (error) {
     console.error("Managing-app access check failed", error);
     return Response.json({ error: "AuthRequired" }, { status: 401 });

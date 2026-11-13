@@ -63,31 +63,32 @@ follows, posts, replies, reactions, and moderation records under the
 SQLite is only a local index. The records stored in AT Protocol Spaces are the
 source of truth.
 
-Spaces dependencies are pinned to the October 22, 2026 release,
-`0.0.0-spaces-alpha-20261022141228`. The client schemas follow the
-[combined upstream implementation](https://github.com/bluesky-social/atproto/tree/ac0c9f15392f6f0298d71dc52aa88c05036150be).
-Credential exchange sends the delegation token and binding key in the request
-body. Credential presentation uses the SDK's tagged HTTP Message Signatures.
-The sync service uses SDK helpers for per-request MACs and STAR repo verification,
-resolves authorities through their PDS, and refreshes KEM keys on verification
-failures. The PDS and space authority continue to own credential validation,
-revocation, writer
-sequencing, and repo-host notification delivery.
+Spaces dependencies are pinned to the November 12, 2026 release,
+`0.0.0-spaces-alpha-20261112204144`. The client schemas follow the
+[upstream implementation](https://github.com/bluesky-social/atproto/tree/d4def6e9f521896ed8222f576d54923d00b5fbeb).
+Spaces are created with a `com.atproto.managedspace.policy` naming the managing
+app, which answers `com.atproto.managedspace.checkAccess` with read and write
+access in one response. Without a `repo`, both private spaces answer no access.
+
+The sync service obtains credentials with `com.atproto.space.authorizeSpaceSync`
+and registers for notifications in the same call, with a random per-space token.
+It serves `confirmRegistration` and `notifySpaceUpdate`, accepting only the token
+it issued for that space. A registration lasts as long as its credential. When
+one lapses, the next update arrives as `registrationExpired`, and the sync
+service reauthorizes and catches up through `listWriters`. A deletion notice is
+confirmed by reauthorizing. Writers removed from the writer set are dropped from
+the index. Repo reads request MACs with `Accept-Signature` and verify them with
+the SDK, refreshing KEM keys on verification failures.
 
 On upgrade, run `bun run migrate` with the deployment's environment, or let the
-sync service apply migrations at startup. Migration `006_space_checkpoint`
-adds a nullable per-space checkpoint without changing existing indexed records.
-Existing watches bootstrap through a full listing; subsequent startup and
-notification catch-up resume from the last successfully processed listing.
-When polling is configured, periodic full reconciliation still removes writers
-absent from the authority's listing. Credentials and ephemeral keys are kept
-only in memory, so restarting discards the old credentials.
-
-The October 22 update needs no new SQLite migration. Stored repo digests and
-LtHash state remain valid, and existing checkpoints resume normally. Restart
-both app and sync processes after installing the update. Space policies and
-member permissions live on the authority, which must run its own upstream
-migrations.
+sync service apply migrations at startup. Migration `007_notify_token` adds the
+per-space notification token and drops the old registration expiry. Registrations
+made with `registerNotify` are not carried over by the host, so each watch
+registers again on its next authorization. Stored repo digests and checkpoints
+remain valid. A checkpoint older than 72 hours is replaced by a full writer
+listing. Credentials and ephemeral keys are kept only in memory, so restarting
+discards the old credentials. Restart both app and sync processes after
+installing the update.
 
 See [`DEPLOY.md`](./DEPLOY.md) for deployment and DNS setup.
 

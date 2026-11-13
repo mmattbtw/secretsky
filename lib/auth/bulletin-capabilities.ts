@@ -35,39 +35,26 @@ export function bulletinCapabilitiesFromScope(
   return {
     canCreateBoard:
       viewerDid === ownerDid &&
-      permissions.allowsSpace({
-        type: SPACE_TYPE,
-        authority: viewerDid,
-        skey: BOARD_SKEY,
-        manage: "create",
-      }),
-    canCreateNote: permissions.allowsSpace({
-      type: SPACE_TYPE,
-      authority: ownerDid,
-      skey: BOARD_SKEY,
-      collection: POST_COLLECTION,
-      action: "create",
-    }),
+      permissions.allowsSpace(
+        { spaceType: SPACE_TYPE, authority: viewerDid, skey: BOARD_SKEY },
+        { manage: "create" },
+      ),
+    canCreateNote: permissions.allowsSpace(
+      { spaceType: SPACE_TYPE, authority: ownerDid, skey: BOARD_SKEY },
+      { collection: POST_COLLECTION, action: "create" },
+    ),
     canManageFollows:
-      permissions.allowsSpace({
-        type: CONNECTIONS_SPACE_TYPE,
-        authority: viewerDid,
-        skey: BOARD_SKEY,
-        manage: "create",
-      }) &&
-      permissions.allowsSpace({
-        type: CONNECTIONS_SPACE_TYPE,
-        authority: viewerDid,
-        skey: BOARD_SKEY,
-        collection: FOLLOW_COLLECTION,
-        action: "create",
-      }) &&
-      permissions.allowsSpace({
-        type: CONNECTIONS_SPACE_TYPE,
-        authority: viewerDid,
-        skey: BOARD_SKEY,
-        collection: FOLLOW_COLLECTION,
-        action: "delete",
-      }),
+      permissions.allowsSpace(
+        { spaceType: CONNECTIONS_SPACE_TYPE, authority: viewerDid, skey: BOARD_SKEY },
+        { manage: "create" },
+      ) &&
+      permissions.allowsSpace(
+        { spaceType: CONNECTIONS_SPACE_TYPE, authority: viewerDid, skey: BOARD_SKEY },
+        { collection: FOLLOW_COLLECTION, action: "create" },
+      ) &&
+      permissions.allowsSpace(
+        { spaceType: CONNECTIONS_SPACE_TYPE, authority: viewerDid, skey: BOARD_SKEY },
+        { collection: FOLLOW_COLLECTION, action: "delete" },
+      ),
   };
 }

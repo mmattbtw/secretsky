@@ -100,7 +100,7 @@ export type DatabaseSchema = {
     spaceUri: string;
     authorityDid: string;
     spaceRev: string | null;
-    registrationExpiresAt: string | null;
+    notifyToken: string | null;
     lastError: string | null;
     updatedAt: string;
   };

@@ -13,6 +13,7 @@ export const PRIVATE_FOLLOWS_MIGRATION_NAME = "003_private_follows";
 export const OAUTH_LOCK_MIGRATION_NAME = "004_oauth_lock";
 export const POST_VERSIONS_MIGRATION_NAME = "005_post_versions";
 export const SPACE_CHECKPOINT_MIGRATION_NAME = "006_space_checkpoint";
+export const NOTIFY_TOKEN_MIGRATION_NAME = "007_notify_token";
 
 const APPLICATION_TABLES = [
   "account",
@@ -169,6 +170,23 @@ const migrationProvider: MigrationProvider = {
         async down(db) {
           await db.schema.alterTable("syncSpace")
             .dropColumn("spaceRev").execute();
+        },
+      },
+      [NOTIFY_TOKEN_MIGRATION_NAME]: {
+        async up(db) {
+          // Notifications are now registered through authorizeSpaceSync with a
+          // per-space token, and last only as long as each credential. Existing
+          // registerNotify registrations are not carried over by the host.
+          await db.schema.alterTable("syncSpace")
+            .addColumn("notifyToken", "text").execute();
+          await db.schema.alterTable("syncSpace")
+            .dropColumn("registrationExpiresAt").execute();
+        },
+        async down(db) {
+          await db.schema.alterTable("syncSpace")
+            .addColumn("registrationExpiresAt", "text").execute();
+          await db.schema.alterTable("syncSpace")
+            .dropColumn("notifyToken").execute();
         },
       },
     };

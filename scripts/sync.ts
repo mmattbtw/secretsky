@@ -10,6 +10,7 @@ if (config.publishLexicons) await publishLexicons();
 const service = new SyncService({
   internalUrl: config.syncInternalUrl,
   managingAppService: config.managingAppService,
+  notifyEndpoint: config.managingAppPublicUrl,
   pollInterval: config.syncPollInterval,
 });
 

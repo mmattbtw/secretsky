@@ -4,6 +4,7 @@ import { CamelCasePlugin, Kysely, sql } from "kysely";
 import { BunSqliteDialect } from "kysely-bun-worker/normal";
 import type { DatabaseSchema } from "./schema";
 import {
+  NOTIFY_TOKEN_MIGRATION_NAME,
   SPACE_CHECKPOINT_MIGRATION_NAME,
   INITIAL_MIGRATION_NAME,
   OAUTH_LOCK_MIGRATION_NAME,
@@ -25,6 +26,7 @@ test("a fresh database includes emoji reactions", async () => {
       OAUTH_LOCK_MIGRATION_NAME,
       POST_VERSIONS_MIGRATION_NAME,
       SPACE_CHECKPOINT_MIGRATION_NAME,
+      NOTIFY_TOKEN_MIGRATION_NAME,
     ]);
     const tables = (await db.introspection.getTables()).map(({ name }) => name);
     assert.equal(tables.includes("removal"), true);
@@ -83,15 +85,21 @@ test("the checkpoint migration upgrades existing watches without deleting their 
     await migrateDatabase(db);
     // Reconstruct the already-applied 005 schema and migration ledger.
     await sql`ALTER TABLE sync_space DROP COLUMN space_rev`.execute(db);
-    await sql`DELETE FROM kysely_migration WHERE name = ${SPACE_CHECKPOINT_MIGRATION_NAME}`.execute(db);
+    await sql`ALTER TABLE sync_space DROP COLUMN notify_token`.execute(db);
+    await sql`ALTER TABLE sync_space ADD COLUMN registration_expires_at text`.execute(db);
+    await sql`DELETE FROM kysely_migration WHERE name IN (${SPACE_CHECKPOINT_MIGRATION_NAME}, ${NOTIFY_TOKEN_MIGRATION_NAME})`.execute(db);
     await sql`INSERT INTO sync_space (space_uri, authority_did, registration_expires_at, updated_at)
       VALUES ('at://space', 'did:plc:owner', '2026-10-02', '2026-10-01')`.execute(db);
     await migrateDatabase(db);
     await migrateDatabase(db);
-    const result = await sql<{ spaceRev: string | null; registrationExpiresAt: string }>`
-      SELECT space_rev, registration_expires_at FROM sync_space WHERE space_uri = 'at://space'
+    const result = await sql<{ spaceRev: string | null; notifyToken: string | null; authorityDid: string }>`
+      SELECT space_rev, notify_token, authority_did FROM sync_space WHERE space_uri = 'at://space'
     `.execute(db);
-    assert.deepEqual(result.rows, [{ spaceRev: null, registrationExpiresAt: "2026-10-02" }]);
+    // registerNotify registrations are replaced by a token issued on the next authorization.
+    assert.deepEqual(result.rows, [{ spaceRev: null, notifyToken: null, authorityDid: "did:plc:owner" }]);
+    const columns = (await db.introspection.getTables())
+      .find(({ name }) => name === "sync_space")?.columns.map(({ name }) => name);
+    assert.equal(columns?.includes("registration_expires_at"), false);
   } finally {
     await db.destroy();
   }

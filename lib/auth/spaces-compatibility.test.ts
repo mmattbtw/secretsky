@@ -36,7 +36,7 @@ test("invalid OAuth scopes identify a non-compatible PDS", () => {
 
 test("a missing Spaces XRPC method identifies a non-compatible PDS", () => {
   const error = new XrpcResponseError(
-    com.atproto.simplespace.createSpace.main,
+    com.atproto.space.createSpace.main,
     new Response(null, { status: 404 }),
     {
       encoding: "application/json",

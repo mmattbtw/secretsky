@@ -4,7 +4,7 @@ import { com } from "../lexicons";
 import { asStringFormat } from "@atproto/lex-schema";
 import { XrpcResponseError } from "@atproto/lex-client";
 import { P256Keypair } from "@atproto/crypto";
-import { createSpaceToken, verifyCredentialSig } from "@atproto/space";
+import { createSpaceCredential, verifyCredentialSig } from "@atproto/space";
 import {
   exchangeSpaceCredential,
   SpaceCredential,
@@ -12,7 +12,7 @@ import {
 
 const AUTHORITY_PDS = "https://authority.example";
 const EXCHANGE_URL =
-  `${AUTHORITY_PDS}/xrpc/com.atproto.space.getSpaceCredential`;
+  `${AUTHORITY_PDS}/xrpc/com.atproto.space.authorizeSpaceSync`;
 const SPACE =
   "at://did:plc:owner/space/at.secretsky.feed/self";
 const DELEGATION_TOKEN = "delegation-token";
@@ -37,7 +37,7 @@ test("credential exchange binds its key and delegation token through the request
         null,
       );
       assert.deepEqual(await request.json(), {
-        space: SPACE, credentialKid: key.did(), delegationToken: DELEGATION_TOKEN,
+        space: SPACE, credentialKey: key.did(), delegationToken: DELEGATION_TOKEN,
       });
 
       assert.equal(request.headers.has("dpop"), false);
@@ -50,6 +50,25 @@ test("credential exchange binds its key and delegation token through the request
 
   assert.equal(requestSeen, true);
   assert.equal(credential, "space-credential");
+});
+
+test("credential exchange registers for notifications when asked", async () => {
+  const key = await P256Keypair.create();
+  const notify = { endpoint: "https://secretsky.at", token: "notify-token" };
+  await exchangeSpaceCredential({
+    authorityPds: AUTHORITY_PDS,
+    delegationToken: DELEGATION_TOKEN,
+    space: SPACE,
+    key,
+    notify,
+    fetchImpl: async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      assert.deepEqual(await request.json(), {
+        space: SPACE, credentialKey: key.did(), delegationToken: DELEGATION_TOKEN, notify,
+      });
+      return Response.json({ credential: "space-credential", spaceRev: "3lzzzzzzzzzaa" });
+    },
+  });
 });
 
 test("credential exchange preserves structured XRPC errors", async () => {
@@ -86,7 +105,7 @@ test("credential reads bind to each repo DID even on a shared PDS", async () => 
     assert.equal(request.headers.get("authorization"), `Atproto-Space-Credential ${token}`);
     assert.equal(request.headers.has("dpop"), false);
     assert.equal(request.headers.get("signature-input"),
-      'atproto-space-credential=("authorization" "atproto-space-audience");tag="atproto-space-credential"');
+      'sig=("authorization" "atproto-space-audience");tag="atproto-space-credential"');
     const headers = Object.fromEntries(request.headers);
     await verifyCredentialSig(headers, asStringFormat(key.did(), "did"));
     await assert.rejects(verifyCredentialSig({
@@ -114,14 +133,17 @@ test("host clients use the bare authority DID and credentials refresh before exp
   assert.equal(credential.needsRefresh(credential.expiresAt - 5_000), true);
   assert.equal(credential.needsRefresh(credential.expiresAt), true);
   await credential.client(AUTHORITY_PDS, "did:plc:owner").call(
-    com.atproto.space.listRepos, { space: asStringFormat(SPACE, "space-ref") },
+    com.atproto.space.listWriters, { space: asStringFormat(SPACE, "space-ref") },
   );
 });
 
 async function tokenFor(key: P256Keypair): Promise<string> {
-  return createSpaceToken("credential", {
-    iss: "did:plc:owner", sub: SPACE, keyId: asStringFormat(key.did(), "did"),
-  }, await P256Keypair.create());
+  return createSpaceCredential({
+    iss: asStringFormat("did:plc:owner", "did"),
+    sub: asStringFormat(SPACE, "space-ref"),
+    keyId: asStringFormat(key.did(), "did"),
+    keypair: await P256Keypair.create(),
+  });
 }
 
 test("raw repo reads preserve revocation and expiry errors for credential replacement", async () => {

@@ -8,8 +8,11 @@ import { isValidDid } from "@atproto/syntax";
 import { com } from "../lexicons";
 import { resolveSpaceHost } from "./identity";
 
-const GET_SPACE_CREDENTIAL_PATH =
-  "/xrpc/com.atproto.space.getSpaceCredential";
+const AUTHORIZE_SPACE_SYNC_PATH =
+  "/xrpc/com.atproto.space.authorizeSpaceSync";
+
+// Registers `endpoint` for notifySpaceUpdate calls while the credential is valid.
+export type SpaceNotifyRegistration = { endpoint: string; token: string };
 
 export class SpaceCredential {
   readonly expiresAt: number;
@@ -33,9 +36,10 @@ export class SpaceCredential {
   ): Promise<Response> => {
     const request = new Request(input, { ...init, redirect: "error" });
     if (!isValidDid(audience)) throw new Error("Invalid space audience DID");
-    const headers = await createSpaceSigHeaders(this.key, {
+    const { headers } = await createSpaceSigHeaders({
       authorization: `Atproto-Space-Credential ${this.token}`,
       audience,
+      keypair: this.key,
     });
     for (const [name, value] of Object.entries(headers)) {
       request.headers.set(name, value);
@@ -54,6 +58,7 @@ export class SpaceCredential {
 export async function mintSpaceCredential(
   session: OAuthSession,
   space: string,
+  notify?: SpaceNotifyRegistration,
 ): Promise<SpaceCredential> {
   const viewerClient = new Client(session);
   const delegation = await viewerClient.call(
@@ -69,6 +74,7 @@ export async function mintSpaceCredential(
     delegationToken: delegation.token,
     space,
     key,
+    notify,
   });
   return new SpaceCredential(credential, key);
 }
@@ -78,9 +84,10 @@ export async function exchangeSpaceCredential(input: {
   delegationToken: string;
   space: string;
   key: P256Keypair;
+  notify?: SpaceNotifyRegistration;
   fetchImpl?: typeof fetch;
 }): Promise<string> {
-  const url = new URL(GET_SPACE_CREDENTIAL_PATH, input.authorityPds);
+  const url = new URL(AUTHORIZE_SPACE_SYNC_PATH, input.authorityPds);
   const request = new Request(url, {
     method: "POST",
     redirect: "error",
@@ -90,8 +97,9 @@ export async function exchangeSpaceCredential(input: {
     },
     body: JSON.stringify({
       space: input.space,
-      credentialKid: input.key.did(),
+      credentialKey: input.key.did(),
       delegationToken: input.delegationToken,
+      ...(input.notify ? { notify: input.notify } : {}),
     }),
   });
 
@@ -108,7 +116,7 @@ export async function exchangeSpaceCredential(input: {
     const message =
       typeof error?.message === "string" ? error.message : undefined;
     throw new XrpcResponseError(
-      com.atproto.space.getSpaceCredential.main,
+      com.atproto.space.authorizeSpaceSync.main,
       response,
       {
         encoding: "application/json",

@@ -74,23 +74,23 @@ export async function createBoard(
 }
 
 async function createFeedSpace(session: OAuthSession): Promise<string> {
-  const result = await new Client(session).call(
-    com.atproto.simplespace.createSpace,
-    {
-      spaceType: SPACE_TYPE,
-      skey: "self",
-      readPolicy: {
-        $type: "com.atproto.simplespace.defs#managingAppPolicy",
-        managingApp: getConfig().managingAppService,
-      },
-      writePolicy: {
-        $type: "com.atproto.simplespace.defs#managingAppPolicy",
-        managingApp: getConfig().managingAppService,
-      },
-      appAccess: { $type: "com.atproto.simplespace.defs#open" },
+  return createManagedSpace(session, SPACE_TYPE);
+}
+
+// The managing app answers checkAccess for both reads and writes.
+async function createManagedSpace(
+  session: OAuthSession,
+  spaceType: typeof SPACE_TYPE | typeof CONNECTIONS_SPACE_TYPE,
+): Promise<string> {
+  const result = await new Client(session).call(com.atproto.space.createSpace, {
+    spaceType,
+    skey: "self",
+    policy: {
+      $type: "com.atproto.managedspace.policy",
+      managingApp: getConfig().managingAppService,
     },
-  );
-  return result.uri;
+  });
+  return result.space;
 }
 
 export async function createPrivateFollow(
@@ -290,24 +290,9 @@ async function ensureConnectionsSpace(session: OAuthSession): Promise<string> {
   const space = connectionsUri(session.did);
   if (await hasSpaceWatch(space)) return space;
   if (await discoverSpace(space)) return space;
-  const result = await new Client(session).call(
-    com.atproto.simplespace.createSpace,
-    {
-      spaceType: CONNECTIONS_SPACE_TYPE,
-      skey: "self",
-      readPolicy: {
-        $type: "com.atproto.simplespace.defs#managingAppPolicy",
-        managingApp: getConfig().managingAppService,
-      },
-      writePolicy: {
-        $type: "com.atproto.simplespace.defs#managingAppPolicy",
-        managingApp: getConfig().managingAppService,
-      },
-      appAccess: { $type: "com.atproto.simplespace.defs#open" },
-    },
-  );
-  await discoverSpace(result.uri);
-  return result.uri;
+  const created = await createManagedSpace(session, CONNECTIONS_SPACE_TYPE);
+  await discoverSpace(created);
+  return created;
 }
 
 async function assertPostTarget(

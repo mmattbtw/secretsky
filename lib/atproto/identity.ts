@@ -7,7 +7,9 @@ import { getAccount, saveAccount } from "../db/queries";
 let resolver: IdResolver | undefined;
 
 export function getIdResolver(): IdResolver {
-  resolver ??= new IdResolver({ plcUrl: getConfig().plcUrl });
+  // The SSRF-protected default fetch needs Node's bundled undici, which Bun
+  // does not expose, so keep the platform fetch used before it was added.
+  resolver ??= new IdResolver({ plcUrl: getConfig().plcUrl, fetch: globalThis.fetch });
   return resolver;
 }
 

@@ -1,0 +1,20 @@
+diff --git a/dist/dispatch.js b/dist/dispatch.js
+index 5cdc3b64820d0b0316facfc22996ede68bda1693..859e317aaf4f57bd635e5df10b4b4435154eb985 100644
+--- a/dist/dispatch.js
++++ b/dist/dispatch.js
+@@ -1,6 +1,5 @@
+ import { Agent as Undici6Agent } from 'undici_v6'; // NodeJS 22
+ import { Agent as Undici7Agent } from 'undici_v7'; // NodeJS 24
+-import { Agent as Undici8Agent } from 'undici_v8'; // NodeJS 26
+ import { FetchRequestError, asRequest, } from '@atproto-labs/fetch';
+ import { compareVersions, parseVersion } from './util.js';
+ /**
+@@ -45,7 +44,7 @@ function buildDispatcher({ checkUrl, lookup }) {
+         : nodeUndiciVersion[0] === 7
+             ? new Undici7Agent({ connect })
+             : nodeUndiciVersion[0] === 8
+-                ? new Undici8Agent({ connect })
++                ? new Undici7Agent({ connect })
+                 : null;
+     // @NOTE Because this is a security feature, we don't want to fallback to
+     // using Agent8 to "future proof" this package. Although future version of

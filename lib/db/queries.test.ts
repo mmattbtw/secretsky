@@ -6,6 +6,9 @@ process.env.DATABASE_PATH = ":memory:";
 const { migrate } = await import("./migrations");
 const {
   advanceSpaceCheckpoint,
+  deleteSyncedSpace,
+  getNotifyToken,
+  isNotifyToken,
   listSpaceWatches,
   deleteSyncedReposExcept,
   getAccount,
@@ -437,4 +440,23 @@ test("space checkpoints persist and never move backward on duplicate or stale wo
   await advanceSpaceCheckpoint(spaceUri, "3lzzzzzzzzzab");
   await saveSpaceWatch({ spaceUri, authorityDid: "did:plc:checkpoint" });
   assert.equal(await checkpoint(), "3lzzzzzzzzzab");
+});
+
+test("notify tokens are issued once per watch and checked against their space", async () => {
+  const spaceUri = "at://did:plc:notify/space/at.secretsky.feed/self";
+  const otherSpace = "at://did:plc:notify/space/at.secretsky.connections/self";
+  assert.equal(await getNotifyToken(spaceUri), null);
+  await saveSpaceWatch({ spaceUri, authorityDid: "did:plc:notify" });
+  await saveSpaceWatch({ spaceUri: otherSpace, authorityDid: "did:plc:notify" });
+  const token = await getNotifyToken(spaceUri);
+  assert.ok(token);
+  assert.equal(await getNotifyToken(spaceUri), token);
+  await saveSpaceWatch({ spaceUri, authorityDid: "did:plc:notify" });
+  assert.equal(await getNotifyToken(spaceUri), token);
+  assert.notEqual(await getNotifyToken(otherSpace), token);
+  assert.equal(await isNotifyToken(spaceUri, token), true);
+  assert.equal(await isNotifyToken(otherSpace, token), false);
+  assert.equal(await isNotifyToken(spaceUri, `${token}x`), false);
+  await deleteSyncedSpace(spaceUri);
+  assert.equal(await isNotifyToken(spaceUri, token), false);
 });

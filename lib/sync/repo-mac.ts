@@ -1,11 +1,12 @@
 import {
-  COMMIT_MAC_TYPE,
-  RepoVerificationError,
+  COMMIT_MAC_PROFILE,
   SpaceMacError,
-  WANT_MAC_HEADER,
+  SpaceRepoVerificationError,
   encapsulate,
-  formatWantMacHeader,
+  formatMacRequest,
+  type Encapsulation,
 } from "@atproto/space";
+import { asStringFormat } from "@atproto/lex-schema";
 import { resolveKemDidKey } from "../atproto/identity";
 
 // Keep the secret with its request, including concurrent reads and pagination.
@@ -13,22 +14,24 @@ import { resolveKemDidKey } from "../atproto/identity";
 export async function withRepoMac<T>(
   repo: string,
   operation: (params: {
-    sharedSecret: Uint8Array;
+    encapsulation: Encapsulation;
     headers: Record<string, string>;
   }) => Promise<T>,
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    const { keyShare, sharedSecret } = await encapsulate(
-      await resolveKemDidKey(repo, attempt > 0),
+    const encapsulation = await encapsulate(
+      asStringFormat(await resolveKemDidKey(repo, attempt > 0), "did"),
     );
 
     try {
       return await operation({
-        sharedSecret,
-        headers: { [WANT_MAC_HEADER]: formatWantMacHeader(COMMIT_MAC_TYPE, keyShare) },
+        encapsulation,
+        headers: {
+          "accept-signature": formatMacRequest(COMMIT_MAC_PROFILE, encapsulation.keyShare),
+        },
       });
     } catch (error) {
-      if (attempt > 0 || !(error instanceof SpaceMacError || error instanceof RepoVerificationError)) {
+      if (attempt > 0 || !(error instanceof SpaceMacError || error instanceof SpaceRepoVerificationError)) {
         throw error;
       }
       // A rotated KEM key can invalidate the MAC. Resolve again and use a new

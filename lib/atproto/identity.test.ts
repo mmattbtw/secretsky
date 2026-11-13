@@ -23,27 +23,20 @@ test("handle resolution does not retain negative responses", async () => {
 
 test("did:web resolution uses the well-known DID document", async () => {
   const did = "did:web:web.mmatt.net";
-  const originalFetch = globalThis.fetch;
-  try {
-    let requestedUrl: string | undefined;
-    globalThis.fetch = async (input) => {
-      requestedUrl = String(input);
-      return Response.json({ id: did });
-    };
-
-    const resolver = new DidWebResolver(1_000);
-    assert.deepEqual(await resolver.resolveNoCheck(did), { id: did });
-    assert.equal(
-      requestedUrl,
-      "https://web.mmatt.net/.well-known/did.json",
-    );
-    await assert.rejects(
-      () => resolver.resolveNoCheck("did:web:example.com:users:alice"),
-      UnsupportedDidWebPathError,
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  let requestedUrl: string | undefined;
+  const resolver = new DidWebResolver(1_000, undefined, async (input) => {
+    requestedUrl = String(input);
+    return Response.json({ id: did });
+  });
+  assert.deepEqual(await resolver.resolveNoCheck(did), { id: did });
+  assert.equal(
+    requestedUrl,
+    "https://web.mmatt.net/.well-known/did.json",
+  );
+  await assert.rejects(
+    () => resolver.resolveNoCheck("did:web:example.com:users:alice"),
+    UnsupportedDidWebPathError,
+  );
 });
 
 test("identity resolution preserves a supported did:web", async () => {

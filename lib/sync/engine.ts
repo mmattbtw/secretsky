@@ -1,21 +1,21 @@
-import { parseCid } from "@atproto/lex-data";
+import { Client } from "@atproto/lex-client";
+import { LexError, parseCid } from "@atproto/lex-data";
 import { asStringFormat } from "@atproto/lex-schema";
+import type { OAuthSession } from "@atproto/oauth-client-node";
 import {
   RepoCommit,
   verifyCommit,
   verifyRepoStarFull,
-  COMMIT_MAC_TYPE,
-  MAC_HEADER,
-  parseMacHeader,
-  SpaceMacError,
-  type Commit,
+  type SpaceCommit,
 } from "@atproto/space";
 import { boardUri, connectionsUri } from "../config";
 import {
   advanceSpaceCheckpoint,
   applySyncedChanges,
+  deleteSyncedRepo,
   deleteSyncedReposExcept,
   deleteSyncedSpace,
+  getNotifyToken,
   getSyncedRepo,
   hideSyncedSpace,
   listSpaceWatches,
@@ -46,20 +46,18 @@ import {
   isSpaceNotFoundError,
   WatchInvalidatedError,
 } from "./errors";
-import {
-  REGISTRATION_RETRY_MS,
-  registrationRenewalDelay,
-} from "./registration";
+import { RECONCILE_RETRY_MS } from "./retry";
 import { parseChange } from "./change-parser";
-import { catchUpRepos } from "./catch-up";
+import { catchUpRepos, isCheckpointFresh } from "./catch-up";
 import { withRepoMac } from "./repo-mac";
 
 type NotifyInput = {
   space: string;
-  repo: string;
-  repoRev: string;
-  spaceRev: string;
-  prevSpaceRev?: string;
+  // The update's space revision. Omitted to catch up unconditionally.
+  spaceRev?: string;
+  // Drop the cached credential so the next authorization renews the
+  // notification registration.
+  reauthorize?: boolean;
 };
 type OnChange = (space: string) => void;
 type SyncedBlob = SpaceBlob & { bytes: Uint8Array };
@@ -79,6 +77,9 @@ export class SyncEngine {
   constructor(
     private readonly onChange: OnChange,
     private readonly managingAppService: string,
+    // Base URL the space host calls confirmRegistration and
+    // notifySpaceUpdate against.
+    private readonly notifyEndpoint: string,
   ) {}
 
   async resume(full = false): Promise<void> {
@@ -134,7 +135,6 @@ export class SyncEngine {
         spaceUri: space,
         authorityDid,
         spaceRev: null,
-        registrationExpiresAt: null,
         lastError: null,
       };
     this.bindWatch(watch);
@@ -195,7 +195,15 @@ export class SyncEngine {
         (item) => item.spaceUri === input.space,
       );
       if (!current || this.isWatchInactive(watch)) return;
-      if (current.spaceRev && input.spaceRev <= current.spaceRev) return;
+      if (
+        !input.reauthorize &&
+        input.spaceRev &&
+        current.spaceRev &&
+        input.spaceRev <= current.spaceRev
+      ) {
+        return;
+      }
+      if (input.reauthorize) this.credentials.delete(input.space);
       watch.spaceRev = current.spaceRev;
       try {
         await this.runReconcile(watch, true);
@@ -259,48 +267,43 @@ export class SyncEngine {
       let changed = false;
       const authorityPds = await resolveSpaceHost(watch.authorityDid);
       const authorityClient = credential.client(authorityPds, watch.authorityDid);
-      let registrationExpiresAt = watch.registrationExpiresAt;
-      if (registrationNeedsRenewal(watch.registrationExpiresAt)) {
-        const registered = await authorityClient.call(
-          com.atproto.space.registerNotify,
-          {
-            space: asStringFormat(watch.spaceUri, "space-ref"),
-            service: this.managingAppService,
-          },
-        );
-        registrationExpiresAt = registered.expiresAt;
-        if (this.isWatchInactive(watch)) return;
-        await updateSpaceWatch({
-          spaceUri: watch.spaceUri,
-          registrationExpiresAt,
-          lastError: null,
-        });
-      }
-      if (registrationExpiresAt) {
-        this.scheduleRegistrationRenewal(watch, registrationExpiresAt);
-      }
+      // An old checkpoint may predate removals the host has since forgotten.
+      const since =
+        incremental && watch.spaceRev && isCheckpointFresh(watch.spaceRev)
+          ? watch.spaceRev
+          : undefined;
 
       const { cursor, repoDids } = await catchUpRepos(
-        (cursor) => authorityClient.call(com.atproto.space.listRepos, {
+        (cursor) => authorityClient.call(com.atproto.space.listWriters, {
           space: asStringFormat(watch.spaceUri, "space-ref"),
           limit: 1000,
           cursor,
         }),
-        async (repo) => {
-          this.assertWatchActive(watch);
-          const local = await getSyncedRepo(watch.spaceUri, repo.did);
-          if (!local || local.rev < repo.repoRev) {
-            await this.enqueue(watch.spaceUri, repo.did, () =>
-              this.syncRepoWithCredential(watch, repo.did, credential),
-            );
-            changed = true;
-          }
+        {
+          syncRepo: async (repo) => {
+            this.assertWatchActive(watch);
+            const local = await getSyncedRepo(watch.spaceUri, repo.repo);
+            if (!local || local.rev < repo.repoRev) {
+              await this.enqueue(watch.spaceUri, repo.repo, () =>
+                this.syncRepoWithCredential(watch, repo.repo, credential),
+              );
+              changed = true;
+            }
+          },
+          // A repo removed from the writer set is no longer part of the space.
+          removeRepo: async (repo) => {
+            this.assertWatchActive(watch);
+            await this.enqueue(watch.spaceUri, repo.repo, async () => {
+              if (this.isWatchInactive(watch)) return;
+              if (await deleteSyncedRepo(watch.spaceUri, repo.repo)) changed = true;
+            });
+          },
         },
-        incremental ? watch.spaceRev ?? undefined : undefined,
+        since,
       );
 
       if (this.isWatchInactive(watch)) return;
-      if (!incremental || watch.spaceRev === null) {
+      if (since === undefined) {
         changed =
           (await deleteSyncedReposExcept(watch.spaceUri, repoDids)) || changed;
       }
@@ -321,27 +324,32 @@ export class SyncEngine {
     ) {
       throw new InvalidBulletinSpaceError();
     }
-    await this.withCredential(watch, async (credential) => {
-      const authorityPds = await resolveSpaceHost(watch.authorityDid);
-      const response = await credential.client(authorityPds, watch.authorityDid).call(
-        com.atproto.simplespace.getSpace,
-        { space: asStringFormat(watch.spaceUri, "space-ref") },
-      );
-      if (
-        response.uri !== watch.spaceUri ||
-        response.readPolicy.$type !==
-          "com.atproto.simplespace.defs#managingAppPolicy" ||
-        !("managingApp" in response.readPolicy) ||
-        response.readPolicy.managingApp !== this.managingAppService ||
-        response.writePolicy.$type !==
-          "com.atproto.simplespace.defs#managingAppPolicy" ||
-        !("managingApp" in response.writePolicy) ||
-        response.writePolicy.managingApp !== this.managingAppService ||
-        response.appAccess.$type !== "com.atproto.simplespace.defs#open"
-      ) {
-        throw new InvalidBulletinSpaceError();
-      }
-    });
+    // getSpace answers only the authority's own OAuth session. Without it the
+    // policy cannot be read, and the space host still enforces it.
+    if (!(await listStoredSessionDids()).includes(watch.authorityDid)) return;
+    let session: OAuthSession;
+    try {
+      session = await (await getOAuthClient()).restore(watch.authorityDid);
+    } catch (error) {
+      console.warn(`could not restore ${watch.authorityDid} to read its space policy`, error);
+      return;
+    }
+    let response;
+    try {
+      response = await new Client(session).call(com.atproto.space.getSpace, {
+        space: asStringFormat(watch.spaceUri, "space-ref"),
+      });
+    } catch (error) {
+      if (isSpaceDeletedError(error)) await this.deleteSpace(watch.spaceUri);
+      throw error;
+    }
+    if (
+      response.space !== watch.spaceUri ||
+      !com.atproto.managedspace.policy.$isTypeOf(response.policy) ||
+      response.policy.managingApp !== this.managingAppService
+    ) {
+      throw new InvalidBulletinSpaceError();
+    }
   }
 
   private async removeWatch(watch: SpaceWatch): Promise<void> {
@@ -411,58 +419,14 @@ export class SyncEngine {
     }
   }
 
-  private async renewRegistration(watch: SpaceWatch): Promise<void> {
-    await this.withCredential(watch, async (credential) => {
-      const authorityPds = await resolveSpaceHost(watch.authorityDid);
-      const authorityClient = credential.client(authorityPds, watch.authorityDid);
-      const registered = await authorityClient.call(
-        com.atproto.space.registerNotify,
-        {
-          space: asStringFormat(watch.spaceUri, "space-ref"),
-          service: this.managingAppService,
-        },
-      );
-      if (this.isWatchInactive(watch)) return;
-      await updateSpaceWatch({
-        spaceUri: watch.spaceUri,
-        registrationExpiresAt: registered.expiresAt,
-        lastError: null,
-      });
-      this.scheduleRegistrationRenewal(watch, registered.expiresAt);
-    });
-  }
-
-  private scheduleRegistrationRenewal(
-    watch: SpaceWatch,
-    expiresAt: string,
-  ): void {
-    this.scheduleMaintenance(
-      watch,
-      registrationRenewalDelay(expiresAt),
-      "renew",
-    );
-  }
-
   private scheduleReconcileRetry(watch: SpaceWatch): void {
-    if (this.isWatchInactive(watch)) return;
-    this.scheduleMaintenance(watch, REGISTRATION_RETRY_MS, "reconcile");
-  }
-
-  private scheduleMaintenance(
-    watch: SpaceWatch,
-    delay: number,
-    task: "renew" | "reconcile",
-  ): void {
     if (this.isWatchInactive(watch)) return;
     const existing = this.maintenanceTimers.get(watch.spaceUri);
     if (existing) clearTimeout(existing);
 
     const timer = setTimeout(() => {
       this.maintenanceTimers.delete(watch.spaceUri);
-      const operation = task === "reconcile"
-        ? this.refreshWatch(watch)
-        : this.renewRegistration(watch);
-      void operation
+      void this.refreshWatch(watch)
         .catch(async (error) => {
           if (isSpaceDeletedError(error)) return;
           if (isInvalidWatchError(error)) {
@@ -474,7 +438,7 @@ export class SyncEngine {
           await this.recordError(watch.spaceUri, error);
         })
         .catch((error) => console.error("could not record sync error", error));
-    }, delay);
+    }, RECONCILE_RETRY_MS);
     timer.unref();
     this.maintenanceTimers.set(watch.spaceUri, timer);
   }
@@ -496,10 +460,10 @@ export class SyncEngine {
       const state = RepoCommit.fromState(local.ltHash);
       const changes: SyncedChange[] = [];
       let cursor: string | undefined;
-      let commit: Commit | undefined;
+      let commit: SpaceCommit | undefined;
 
       do {
-        const page = await withRepoMac(repoDid, async ({ sharedSecret, headers }) => {
+        const page = await withRepoMac(repoDid, async ({ encapsulation, headers }) => {
           const response = await client.xrpc(com.atproto.space.listRepoOps, {
             params: {
               space: asStringFormat(watch.spaceUri, "space-ref"),
@@ -510,16 +474,14 @@ export class SyncEngine {
             },
             headers,
           });
-          const page = response.body;
-          if (page.commit && !verifyCommit(page.commit, {
-            space: watch.spaceUri,
-            repo: repoDid,
-            sharedSecret,
-            mac: parseMacHeader(response.headers.get(MAC_HEADER) ?? undefined, COMMIT_MAC_TYPE),
-          })) {
-            throw new SpaceMacError("Incremental commit failed verification");
-          }
-          return page;
+          // Every page carries the repo's current commit, MACed for this request.
+          verifyCommit(response.body.commit, {
+            ...encapsulation,
+            headers: response.headers,
+            space: asStringFormat(watch.spaceUri, "space-ref"),
+            repo: asStringFormat(repoDid, "did"),
+          });
+          return response.body;
         });
         for (const op of page.ops) {
           state.applyOp({
@@ -539,7 +501,7 @@ export class SyncEngine {
           if (change) changes.push(change);
         }
         cursor = page.cursor;
-        if (page.commit) commit = page.commit;
+        commit = page.commit;
       } while (cursor);
 
       if (!commit) throw new Error("Incremental sync did not reach a commit");
@@ -581,19 +543,28 @@ export class SyncEngine {
     const url = new URL(`${pdsUrl}/xrpc/com.atproto.space.getRepo`);
     url.searchParams.set("space", space);
     url.searchParams.set("repo", repoDid);
-    const recovered = await withRepoMac(repoDid, async ({ sharedSecret, headers }) => {
-      const response = await credential.fetch(repoDid, url, { headers });
-      if (!response.ok) await throwSpaceResponseError(response);
-      return verifyRepoStarFull(
-        [new Uint8Array(await response.arrayBuffer())],
-        {
-          space,
-          repo: repoDid,
-          sharedSecret,
-          mac: parseMacHeader(response.headers.get(MAC_HEADER) ?? undefined, COMMIT_MAC_TYPE),
-        },
-      );
-    });
+    let recovered;
+    try {
+      recovered = await withRepoMac(repoDid, async ({ encapsulation, headers }) => {
+        const response = await credential.fetch(repoDid, url, { headers });
+        if (!response.ok) await throwSpaceResponseError(response);
+        return verifyRepoStarFull(
+          [new Uint8Array(await response.arrayBuffer())],
+          {
+            ...encapsulation,
+            headers: response.headers,
+            space: asStringFormat(space, "space-ref"),
+            repo: asStringFormat(repoDid, "did"),
+          },
+        );
+      });
+    } catch (error) {
+      // A host may discard an emptied space repo; that reads as an empty repo.
+      if (!isRepoNotFoundError(error)) throw error;
+      if (this.isWatchInactive(watch)) return;
+      if (await deleteSyncedRepo(space, repoDid)) this.onChange(space);
+      return;
+    }
     const posts: Parameters<typeof replaceRepoRecords>[0]["posts"] = [];
     const removals: Parameters<typeof replaceRepoRecords>[0]["removals"] = [];
     const reactions: NonNullable<Parameters<typeof replaceRepoRecords>[0]["reactions"]> = [];
@@ -745,15 +716,20 @@ export class SyncEngine {
     }
     const sessionDids = await listStoredSessionDids();
     const oauthClient = await getOAuthClient();
+    // Every authorization renews this watch's notification registration.
+    const token = await getNotifyToken(watch.spaceUri);
+    const notify = token ? { endpoint: this.notifyEndpoint, token } : undefined;
     let lastError: unknown;
+    let notFoundError: unknown;
 
     if (sessionDids.includes(watch.authorityDid)) {
       try {
         const session = await oauthClient.restore(watch.authorityDid);
-        const credential = await mintSpaceCredential(session, watch.spaceUri);
+        const credential = await mintSpaceCredential(session, watch.spaceUri, notify);
         this.credentials.set(watch.spaceUri, credential);
         return credential;
       } catch (error) {
+        // The authority is always authorized, so its answer is definitive.
         if (isSpaceDeletedError(error) || isSpaceNotFoundError(error)) {
           throw error;
         }
@@ -778,12 +754,16 @@ export class SyncEngine {
     for (const did of candidates) {
       try {
         const session = await oauthClient.restore(did);
-        const credential = await mintSpaceCredential(session, watch.spaceUri);
+        const credential = await mintSpaceCredential(session, watch.spaceUri, notify);
         this.credentials.set(watch.spaceUri, credential);
         return credential;
       } catch (error) {
-        if (isSpaceDeletedError(error) || isSpaceNotFoundError(error)) {
-          throw error;
+        if (isSpaceDeletedError(error)) throw error;
+        // The host also answers SpaceNotFound to accounts it refuses, so try
+        // the remaining sessions before concluding the space is missing.
+        if (isSpaceNotFoundError(error)) {
+          notFoundError ??= error;
+          continue;
         }
         lastError = error;
         if (!isSpaceAccessDeniedError(error)) {
@@ -792,7 +772,9 @@ export class SyncEngine {
       }
     }
 
-    throw lastError ?? new Error("No authorized OAuth session can sync this board");
+    throw lastError ??
+      notFoundError ??
+      new Error("No authorized OAuth session can sync this board");
   }
 
   private enqueue(space: string, repo: string, job: () => Promise<void>): Promise<void> {
@@ -827,6 +809,10 @@ class InvalidBulletinSpaceError extends Error {
   }
 }
 
+function isRepoNotFoundError(error: unknown): boolean {
+  return error instanceof LexError && error.error === "RepoNotFound";
+}
+
 function isInvalidWatchError(error: unknown): boolean {
   return (
     error instanceof InvalidBulletinSpaceError || isSpaceNotFoundError(error)
@@ -837,10 +823,6 @@ function authorityFromSpace(space: string): string {
   const authority = space.match(/^at:\/\/(did:[^/]+)\/space\//)?.[1];
   if (!authority) throw new Error("Invalid board reference");
   return authority;
-}
-
-function registrationNeedsRenewal(expiresAt: string | null): boolean {
-  return !expiresAt || Date.parse(expiresAt) - Date.now() < 60 * 60 * 1000;
 }
 
 function stripPost(value: Extract<SyncedChange, { kind: "post" }>["value"]) {

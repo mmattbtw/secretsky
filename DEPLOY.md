@@ -75,7 +75,10 @@ These are three intentionally separate identities:
 
 The managing-app DID document is served at `/.well-known/did.json`. Keep its
 service URL aligned with the public HTTPS origin so Spaces-compatible PDSes can
-call the access and notification endpoints.
+call `com.atproto.managedspace.checkAccess`. The sync service registers
+`MANAGING_APP_PUBLIC_URL` as its notification endpoint, so it must be a public
+HTTPS origin that serves `com.atproto.space.confirmRegistration` and
+`com.atproto.space.notifySpaceUpdate`.
 
 ## 4. Smoke test
 

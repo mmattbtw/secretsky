@@ -1,3 +1,4 @@
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 import { deleteBlobFile } from "../blob-store";
 import type { NoteImage } from "../note-image";
@@ -43,7 +44,6 @@ export type SpaceWatch = {
   spaceUri: string;
   authorityDid: string;
   spaceRev: string | null;
-  registrationExpiresAt: string | null;
   lastError: string | null;
 };
 
@@ -197,7 +197,7 @@ export async function saveSpaceWatch(input: {
     .insertInto("syncSpace")
     .values({
       ...input,
-      registrationExpiresAt: null,
+      notifyToken: null,
       spaceRev: null,
       lastError: null,
       updatedAt: new Date().toISOString(),
@@ -218,10 +218,42 @@ export async function listSpaceWatches(): Promise<SpaceWatch[]> {
       "spaceUri",
       "authorityDid",
       "spaceRev",
-      "registrationExpiresAt",
       "lastError",
     ])
     .execute();
+}
+
+// The secret a space host echoes on notification calls for this watch. It stays
+// stable across authorizations so each one renews the same registration.
+export async function getNotifyToken(spaceUri: string): Promise<string | null> {
+  const db = getQueryDb();
+  await db
+    .updateTable("syncSpace")
+    .set({ notifyToken: randomBytes(32).toString("base64url") })
+    .where("spaceUri", "=", spaceUri)
+    .where("notifyToken", "is", null)
+    .execute();
+  const row = await db
+    .selectFrom("syncSpace")
+    .select("notifyToken")
+    .where("spaceUri", "=", spaceUri)
+    .executeTakeFirst();
+  return row?.notifyToken ?? null;
+}
+
+export async function isNotifyToken(
+  spaceUri: string,
+  token: string,
+): Promise<boolean> {
+  const row = await getQueryDb()
+    .selectFrom("syncSpace")
+    .select("notifyToken")
+    .where("spaceUri", "=", spaceUri)
+    .executeTakeFirst();
+  if (!row?.notifyToken) return false;
+  const expected = Buffer.from(row.notifyToken);
+  const actual = Buffer.from(token);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 export async function hasSpaceWatch(spaceUri: string): Promise<boolean> {
@@ -274,19 +306,14 @@ export async function deleteSyncedSpace(spaceUri: string): Promise<void> {
 
 export async function updateSpaceWatch(input: {
   spaceUri: string;
-  registrationExpiresAt?: string | null;
   lastError?: string | null;
 }): Promise<void> {
   await getQueryDb()
     .updateTable("syncSpace")
-    .set((eb) => ({
-      registrationExpiresAt: eb.fn.coalesce(
-        eb.val(input.registrationExpiresAt ?? null),
-        "syncSpace.registrationExpiresAt",
-      ),
+    .set({
       lastError: input.lastError ?? null,
       updatedAt: new Date().toISOString(),
-    }))
+    })
     .where("spaceUri", "=", input.spaceUri)
     .execute();
 }
@@ -362,8 +389,28 @@ export async function deleteSyncedReposExcept(
   const staleRepoDids = localRepos
     .map(({ repoDid }) => repoDid)
     .filter((repoDid) => !repoDids.has(repoDid));
-  if (staleRepoDids.length === 0) return false;
+  return deleteSyncedRepos(spaceUri, staleRepoDids);
+}
 
+export async function deleteSyncedRepo(
+  spaceUri: string,
+  repoDid: string,
+): Promise<boolean> {
+  const local = await getQueryDb()
+    .selectFrom("syncRepo")
+    .select("repoDid")
+    .where("spaceUri", "=", spaceUri)
+    .where("repoDid", "=", repoDid)
+    .executeTakeFirst();
+  return local ? deleteSyncedRepos(spaceUri, [repoDid]) : false;
+}
+
+async function deleteSyncedRepos(
+  spaceUri: string,
+  staleRepoDids: string[],
+): Promise<boolean> {
+  if (staleRepoDids.length === 0) return false;
+  const db = getQueryDb();
   const dereferenced = await writeTransaction(db, async (trx) => {
     const cids: string[] = [];
     for (const repoDid of staleRepoDids) {

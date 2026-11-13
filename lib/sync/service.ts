@@ -1,14 +1,19 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { isNotifyToken } from "../db/queries";
 import { SyncEngine } from "./engine";
 import { isBoardAbsentError } from "./errors";
-import {
-  verifySpaceDeletionNotification,
-  verifySyncNotification,
-} from "./service-auth";
+
+const REPO_WRITE = "com.atproto.space.defs#repoWrite";
+const REPO_REMOVED = "com.atproto.space.defs#repoRemoved";
+const SPACE_DELETED = "com.atproto.space.notifySpaceUpdate#spaceDeleted";
+const REGISTRATION_EXPIRED =
+  "com.atproto.space.notifySpaceUpdate#registrationExpired";
 
 export type SyncServiceOptions = {
   internalUrl: string;
   managingAppService: string;
+  // Public base URL that space hosts send notification calls to.
+  notifyEndpoint: string;
   pollInterval?: number;
 };
 
@@ -30,6 +35,7 @@ export class SyncService {
     this.#engine = new SyncEngine(
       (space) => this.#broadcast(space),
       options.managingAppService,
+      options.notifyEndpoint,
     );
   }
 
@@ -129,48 +135,50 @@ export class SyncService {
       }
       if (
         request.method === "POST" &&
-        url.pathname === "/xrpc/com.atproto.space.notifyWrite"
+        url.pathname === "/xrpc/com.atproto.space.confirmRegistration"
       ) {
+        // The space host checks that this service issued the token for the
+        // space before registering it. The token is the only authentication.
         const body = await readJson(request);
         if (
-          typeof body.space !== "string" ||
-          typeof body.repo !== "string" ||
-          typeof body.repoRev !== "string" ||
-          typeof body.spaceRev !== "string" ||
-          (body.prevSpaceRev !== undefined && typeof body.prevSpaceRev !== "string")
+          !isTokenBody(body) ||
+          typeof body.challenge !== "string" ||
+          body.challenge.length > 512 ||
+          !(await isNotifyToken(body.space, body.token))
         ) {
-          return json(response, 400, { error: "Invalid notification" });
+          return json(response, 400, { error: "InvalidRequest" });
         }
-        const authorization = Array.isArray(request.headers.authorization)
-          ? request.headers.authorization[0]
-          : request.headers.authorization;
-        await verifySyncNotification(authorization, body.space);
-        json(response, 200, {});
-        void this.#engine
-          .notify({
-            space: body.space,
-            repo: body.repo,
-            repoRev: body.repoRev,
-            spaceRev: body.spaceRev,
-            ...(typeof body.prevSpaceRev === "string"
-              ? { prevSpaceRev: body.prevSpaceRev } : {}),
-          })
-          .catch((error) => console.error("notification sync failed", error));
-        return;
+        return json(response, 200, { challenge: body.challenge });
       }
       if (
         request.method === "POST" &&
-        url.pathname === "/xrpc/com.atproto.space.notifySpaceDeleted"
+        url.pathname === "/xrpc/com.atproto.space.notifySpaceUpdate"
       ) {
         const body = await readJson(request);
-        if (typeof body.space !== "string") {
-          return json(response, 400, { error: "Invalid notification" });
+        // Rejecting an unknown token (including one for a watch that has been
+        // removed) is a non-retryable error, which unregisters the endpoint.
+        if (!isTokenBody(body) || !(await isNotifyToken(body.space, body.token))) {
+          return json(response, 400, { error: "InvalidRequest" });
         }
-        const authorization = Array.isArray(request.headers.authorization)
-          ? request.headers.authorization[0]
-          : request.headers.authorization;
-        await verifySpaceDeletionNotification(authorization, body.space);
-        await this.#engine.deleteSpace(body.space, { waitForRemoval: true });
+        const update = body.update;
+        const type = update && typeof update === "object" && "$type" in update
+          ? update.$type : undefined;
+        const spaceRev = update && typeof update === "object" &&
+          "spaceRev" in update && typeof update.spaceRev === "string"
+          ? update.spaceRev : undefined;
+        if (type === REPO_WRITE || type === REPO_REMOVED) {
+          if (!spaceRev) return json(response, 400, { error: "InvalidRequest" });
+          json(response, 200, {});
+          this.#notify({ space: body.space, spaceRev });
+          return;
+        }
+        if (type === REGISTRATION_EXPIRED || type === SPACE_DELETED) {
+          // Reauthorize, which renews the registration and catches up. Only a
+          // SpaceDeleted answer to that confirms a deletion.
+          json(response, 200, {});
+          this.#notify({ space: body.space, reauthorize: true });
+          return;
+        }
         return json(response, 200, {});
       }
       return json(response, 404, { error: "Not found" });
@@ -178,6 +186,12 @@ export class SyncService {
       console.error("sync service request failed", error);
       return json(response, 500, { error: "Sync failed" });
     }
+  }
+
+  #notify(input: Parameters<SyncEngine["notify"]>[0]): void {
+    void this.#engine
+      .notify(input)
+      .catch((error) => console.error("notification sync failed", error));
   }
 
   #resume(full = false): void {
@@ -218,6 +232,16 @@ async function readJson(
     string,
     unknown
   >;
+}
+
+function isTokenBody(
+  body: Record<string, unknown>,
+): body is Record<string, unknown> & { space: string; token: string } {
+  return (
+    typeof body.space === "string" &&
+    typeof body.token === "string" &&
+    body.token.length <= 512
+  );
 }
 
 function json(response: ServerResponse, status: number, body: unknown): void {
