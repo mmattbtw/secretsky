@@ -31,7 +31,7 @@ import {
 import { getOAuthClient, listStoredSessionDids } from "../auth/client";
 import { readBlobFile, storeBlobFile } from "../blob-store";
 import { com } from "../lexicons";
-import { resolvePds, resolveSpaceHost } from "../atproto/identity";
+import { resolveSpaceHost } from "../atproto/identity";
 import { getMutualsAmong } from "../follows";
 import {
   mintSpaceCredential,
@@ -539,7 +539,9 @@ export class SyncEngine {
     credential: SpaceCredential,
   ): Promise<void> {
     const space = watch.spaceUri;
-    const pdsUrl = await resolvePds(repoDid);
+    // Resolve the current host rather than the cached one, so a repo whose
+    // account migrated is read from its new host.
+    const pdsUrl = await resolveSpaceHost(repoDid);
     const url = new URL(`${pdsUrl}/xrpc/com.atproto.space.getRepo`);
     url.searchParams.set("space", space);
     url.searchParams.set("repo", repoDid);

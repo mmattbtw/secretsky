@@ -105,6 +105,7 @@ async function withEngine(run: (context: {
         id: `${REPO}#atproto_kem`, type: "Multikey", controller: REPO,
         publicKeyMultibase: currentKey.did().slice("did:key:".length),
       }],
+      service: [{ id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: PDS }],
     };
   };
 
@@ -210,7 +211,8 @@ test("MAC failure refreshes the KEM key and retries with a new key share", async
       return new Response(await archive(value, []), { headers: macHeaders(mac, value) });
     });
     await recover();
-    assert.deepEqual(refreshes, [false, true]);
+    // One lookup for the repo host, then the KEM key and its forced refresh.
+    assert.deepEqual(refreshes, [false, false, true]);
     assert.equal(new Set(keyShares).size, 2);
     assert.equal((await getSyncedRepo(SPACE, REPO))?.rev, REV1);
   });

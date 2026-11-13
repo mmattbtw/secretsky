@@ -34,6 +34,13 @@ test("recognizes user-scoped space access denial", () => {
   assert.equal(isSpaceAccessDeniedError(new Error("AccountNotAuthorized")), false);
 });
 
+test("a suspended authority is not a missing or deleted board", () => {
+  for (const code of ["RepoTakendown", "RepoDeactivated"]) {
+    assert.equal(isBoardAbsentError(new LexError(code)), false);
+    assert.equal(isSpaceAccessDeniedError(new LexError(code)), false);
+  }
+});
+
 test("treats durable deletions and invalidated watches as absent boards", () => {
   assert.equal(isBoardAbsentError(new LexError("SpaceNotFound")), true);
   assert.equal(isBoardAbsentError(new LexError("SpaceDeleted")), true);
