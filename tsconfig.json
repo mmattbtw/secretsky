@@ -34,7 +34,7 @@
     "scripts/**/*.ts",
     "vite.config.ts"
   ],
-  "exclude": [
+  "exclude": ["tools/oxlint/anti-slop", 
     "node_modules",
     ".output"
   ]
